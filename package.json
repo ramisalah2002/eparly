@@ -1,0 +1,15 @@
+{
+  "name": "eparly",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:mobile": "pnpm --filter ./apps/mobile dev",
+    "dev:admin": "pnpm --filter ./apps/admin dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.10"
+  }
+}
