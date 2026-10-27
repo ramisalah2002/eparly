@@ -21,7 +21,7 @@ Depuis la racine du projet :
 ```bash
 cd infra
 cp .env.example .env   # (si premier lancement)
-docker compose up -d
+docker compose --profile local up -d
 ```
 
 Vérifier la santé du conteneur :
@@ -41,19 +41,42 @@ Depuis `services/api` :
 ```bash
 cd services/api
 
-# Via Maven Wrapper (avec profil local actif par défaut) :
-./mvnw spring-boot:run
-# ou sous Windows PowerShell :
-.\mvnw.cmd spring-boot:run
+# Sous Windows PowerShell, activer explicitement le profil local :
+.\mvnw.cmd '-Dspring-boot.run.profiles=local' spring-boot:run
 
 # Ou via le JAR exécutable packagé :
 java -Dspring.profiles.active=local -jar target/api-0.0.1-SNAPSHOT.jar
 ```
 
-Le profil `local` intègre automatiquement :
+Le profil `local` doit être activé explicitement (`.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local`) et intègre :
 - L'import sécurisé des variables locales depuis `../../infra/.env` (non commité).
 - La connexion au conteneur PostgreSQL `eparly_db` avec pool HikariCP (`EparlyHikariPool`).
 - L'exécution automatique des migrations Flyway au démarrage.
+- Mailpit pour le SMTP local (`127.0.0.1:1025`, interface `http://127.0.0.1:8025`).
+- Les clés JWT de développement, placées sous `infra/keys/` et exclues de Git.
+- Les endpoints OpenAPI locaux sont disponibles sous `/v3/api-docs` et Swagger UI sous `/swagger-ui.html`.
+
+Générer une paire RSA avant le démarrage (format PEM PKCS#8/X.509), depuis la racine du dépôt :
+```bash
+node -e "const fs=require('node:fs');const c=require('node:crypto');fs.mkdirSync('infra/keys',{recursive:true});const k=c.generateKeyPairSync('rsa',{modulusLength:3072,publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}});fs.writeFileSync('infra/keys/jwt-private.pem',k.privateKey,{mode:0o600});fs.writeFileSync('infra/keys/jwt-public.pem',k.publicKey)"
+```
+Ces fichiers sont exclus de Git. Ne jamais réutiliser les clés locales en production. La production exige le profil `prod`, une paire RSA privée/publique et un keystore TLS fournis par configuration sécurisée.
+
+### Sessions mobiles : refresh et logout
+
+`POST /v1/auth/login` retourne `accessToken` (JWT, 15 minutes par défaut), `expiresIn` en secondes, `refreshToken` opaque et `refreshExpiresIn` (30 jours par défaut). Le client React Native doit conserver le refresh token exclusivement dans **Expo SecureStore**, jamais dans AsyncStorage, une URL ou les logs.
+
+Quand l'access token expire, appeler `POST /v1/auth/refresh` avec `{"refreshToken":"<refresh token courant>"}`. Une rotation invalide l'ancien jeton et retourne un nouveau couple. La durée du refresh token n'est pas prolongée lors d'une rotation : elle est calculée depuis la création initiale de la famille de session. Les erreurs de jeton retournent `401`; le client doit alors supprimer les jetons locaux et demander une nouvelle connexion.
+
+La réutilisation d'un refresh token consommé révoque toute sa famille. Cela protège contre le rejeu, mais une réponse de rotation perdue implique une reconnexion : ne pas réessayer l'ancien jeton. `POST /v1/auth/logout` accepte `{"refreshToken":"<refresh token courant>"}` et retourne toujours `204`, sans exiger d'access token. Le logout révoque toute la famille et est idempotent ; un JWT d'accès déjà émis reste utilisable jusqu'à son expiration.
+
+Exemple :
+```http
+POST /v1/auth/refresh
+Content-Type: application/json
+
+{"refreshToken":"<refresh token courant>"}
+```
 
 ### 3. Exécuter les tests automatisés
 
@@ -79,7 +102,7 @@ Convention de nommage stricte :
 Règles de migration :
 - Une migration appliquée ne doit **jamais** être modifiée rétrospectivement.
 - Toute modification de structure ou de données ultérieure doit faire l'objet d'un nouveau numéro de version séquentiel (`V2`, `V3`, etc.).
-- Hibernate est configuré en `ddl-auto=none` : **seul Flyway** gère les modifications de schéma.
+- Hibernate est configuré en `ddl-auto=validate` : **seul Flyway** gère les modifications de schéma ; V1/V2 restent inchangées et V3 ajoute les jetons de vérification email.
 
 ### 5. Vérifier la connexion à la base et la santé de l'API
 
