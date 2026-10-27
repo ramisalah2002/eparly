@@ -1,0 +1,28 @@
+name: eparly-infra
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: eparly-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-eparly_db}
+      POSTGRES_USER: ${POSTGRES_USER:-eparly_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # Expose PostgreSQL uniquement sur l'interface locale (127.0.0.1) pour des raisons de sécurité
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - eparly_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eparly_user} -d ${POSTGRES_DB:-eparly_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  eparly_postgres_data:
+    name: eparly_postgres_data
