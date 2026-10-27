@@ -10,6 +10,9 @@ Ce dossier contient la configuration de l'infrastructure locale pour l'applicati
   - Port exposé : `127.0.0.1:5432` (restreint à la boucle locale pour des raisons de sécurité)
   - Persistance : Volume Docker nommé `eparly_postgres_data`
   - Healthcheck natif : `pg_isready`
+- **Mailpit** (`axllent/mailpit`)
+  - Activé uniquement avec le profil Compose `local`.
+  - SMTP : `127.0.0.1:1025` ; interface web : `http://127.0.0.1:8025`.
 
 ---
 
@@ -48,14 +51,14 @@ Toutes les commandes ci-dessous doivent être exécutées depuis le dossier `inf
 
 ### 1. Démarrer les services en arrière-plan
 ```bash
-docker compose up -d
+docker compose --profile local up -d
 ```
 
 ### 2. Vérifier l'état et la santé du conteneur
 ```bash
 docker compose ps
 ```
-Le conteneur `eparly-postgres` doit afficher le statut `Up ... (healthy)`.
+Les conteneurs `eparly-postgres` et `eparly-mailpit` doivent être démarrés ; PostgreSQL doit afficher `healthy`.
 
 ### 3. Consulter les logs
 ```bash
@@ -64,6 +67,8 @@ docker compose logs -f postgres
 
 # 50 dernières lignes de log
 docker compose logs --tail=50 postgres
+
+# Consulter les emails reçus dans Mailpit : http://127.0.0.1:8025
 ```
 
 ### 4. Tester la connexion SQL avec psql

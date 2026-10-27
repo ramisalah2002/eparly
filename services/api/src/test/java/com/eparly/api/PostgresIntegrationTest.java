@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -18,6 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @Testcontainers
+@ActiveProfiles("test")
+@Import(TestJwtConfiguration.class)
 class PostgresIntegrationTest {
 
 	@Container
@@ -41,13 +45,33 @@ class PostgresIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("Should have executed Flyway V1 migration in flyway_schema_history")
+	@DisplayName("Should have executed Flyway V1 to V6 migrations in flyway_schema_history")
 	void shouldHaveFlywayHistory() {
 		Integer migrationCount = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = true",
 				Integer.class
 		);
 		assertThat(migrationCount).isNotNull().isEqualTo(1);
+		Integer v3Count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '3' AND success = true",
+				Integer.class
+		);
+		assertThat(v3Count).isNotNull().isEqualTo(1);
+		Integer v4Count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '4' AND success = true",
+				Integer.class
+		);
+		assertThat(v4Count).isNotNull().isEqualTo(1);
+		Integer v5Count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '5' AND success = true",
+				Integer.class
+		);
+		assertThat(v5Count).isNotNull().isEqualTo(1);
+		Integer v6Count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '6' AND success = true",
+				Integer.class
+		);
+		assertThat(v6Count).isNotNull().isEqualTo(1);
 	}
 
 	@Test

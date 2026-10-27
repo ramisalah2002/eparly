@@ -23,6 +23,18 @@ services:
       retries: 5
       start_period: 10s
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: eparly-mailpit
+    restart: unless-stopped
+    profiles:
+      - local
+    ports:
+      # SMTP pour la réception d'emails en développement
+      - "127.0.0.1:1025:1025"
+      # Interface Web pour visualiser les emails envoyés
+      - "127.0.0.1:8025:8025"
+
 volumes:
   eparly_postgres_data:
     name: eparly_postgres_data

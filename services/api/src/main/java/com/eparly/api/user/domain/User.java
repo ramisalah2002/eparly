@@ -51,6 +51,12 @@ public class User {
     @Column(name = "email_verified_at")
     private Instant emailVerifiedAt;
 
+    @Column(name = "token_invalid_before")
+    private Instant tokenInvalidBefore;
+
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion = 1;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -138,6 +144,26 @@ public class User {
 
     public void setEmailVerifiedAt(Instant emailVerifiedAt) {
         this.emailVerifiedAt = emailVerifiedAt;
+    }
+
+    public Instant getTokenInvalidBefore() {
+        return tokenInvalidBefore;
+    }
+
+    public void setTokenInvalidBefore(Instant tokenInvalidBefore) {
+        this.tokenInvalidBefore = tokenInvalidBefore;
+    }
+
+    public int getTokenVersion() {
+        return tokenVersion;
+    }
+
+    public void setTokenVersion(int tokenVersion) {
+        this.tokenVersion = tokenVersion;
+    }
+
+    public void incrementTokenVersion() {
+        this.tokenVersion++;
     }
 
     public Instant getCreatedAt() {
