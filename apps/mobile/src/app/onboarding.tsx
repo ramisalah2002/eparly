@@ -77,7 +77,7 @@ export default function OnboardingScreen() {
     } catch {
       // Ignore storage errors and proceed with navigation
     }
-    router.replace('/(tabs)');
+    router.replace('/welcome');
   }, [router]);
 
   // Handle CTA button press

@@ -58,7 +58,7 @@ export default function SplashScreenComponent() {
       if (hasNavigated.current || !isMounted.current) return;
       hasNavigated.current = true;
       if (hasCompletedOnboardingRef.current) {
-        router.replace('/(tabs)');
+        router.replace('/welcome');
       } else {
         router.replace('/onboarding');
       }
