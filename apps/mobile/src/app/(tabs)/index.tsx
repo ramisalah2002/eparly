@@ -1,5 +1,5 @@
 import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { Alert, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedIcon } from '@/components/animated-icon';
@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { resetOnboarding } from '@/services/onboarding-storage';
 
 function getDevMenuHint() {
   if (Platform.OS === 'web') {
@@ -29,6 +30,14 @@ function getDevMenuHint() {
 }
 
 export default function HomeScreen() {
+  const handleResetOnboarding = async () => {
+    await resetOnboarding();
+    Alert.alert(
+      'Onboarding Reset',
+      'The onboarding completed flag has been cleared. Reload the app (press "r") to experience first-launch onboarding.'
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -49,6 +58,14 @@ export default function HomeScreen() {
             hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
           />
           <HintRow title="Dev tools" hint={getDevMenuHint()} />
+          <HintRow
+            title="Onboarding"
+            hint={
+              <TouchableOpacity onPress={handleResetOnboarding}>
+                <ThemedText type="code">reset flow</ThemedText>
+              </TouchableOpacity>
+            }
+          />
           <HintRow
             title="Fresh start"
             hint={<ThemedText type="code">npm run reset-project</ThemedText>}

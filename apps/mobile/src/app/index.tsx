@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EparlyLogo } from '@/components/eparly-logo';
 import { ThemedText } from '@/components/themed-text';
+import { getHasCompletedOnboarding } from '@/services/onboarding-storage';
 
 const SPLASH_BG_COLOR = '#FFFFFF';
 const BRAND_GREEN = '#16A085';
@@ -26,6 +27,7 @@ export default function SplashScreenComponent() {
   const hasNavigated = useRef(false);
   const isMounted = useRef(true);
   const systemReducedMotion = useReducedMotion();
+  const hasCompletedOnboardingRef = useRef(false);
 
   // Animation values
   const logoOpacity = useSharedValue(0);
@@ -39,13 +41,27 @@ export default function SplashScreenComponent() {
 
   useEffect(() => {
     isMounted.current = true;
+
+    // Asynchronously pre-fetch onboarding completion state during splash animation
+    getHasCompletedOnboarding()
+      .then((completed) => {
+        hasCompletedOnboardingRef.current = completed;
+      })
+      .catch(() => {
+        hasCompletedOnboardingRef.current = false;
+      });
+
     let navTimer: ReturnType<typeof setTimeout> | null = null;
     let fadeTimer: ReturnType<typeof setTimeout> | null = null;
 
     const navigateToNextScreen = () => {
       if (hasNavigated.current || !isMounted.current) return;
       hasNavigated.current = true;
-      router.replace('/(tabs)');
+      if (hasCompletedOnboardingRef.current) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/onboarding');
+      }
     };
 
     const startAnimation = async () => {
