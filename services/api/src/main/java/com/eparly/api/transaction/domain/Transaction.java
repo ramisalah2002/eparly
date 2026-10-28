@@ -311,7 +311,6 @@ public class Transaction {
                 ", bookingDate=" + bookingDate +
                 ", amountMinor=" + amountMinor +
                 ", currency='" + currency + '\'' +
-                ", normalizedLabel='" + normalizedLabel + '\'' +
                 ", transactionType=" + transactionType +
                 ", customCategoryFlag=" + customCategoryFlag +
                 '}';

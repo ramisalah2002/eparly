@@ -45,7 +45,7 @@ class PostgresIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("Should have executed Flyway V1 to V7 migrations in flyway_schema_history")
+	@DisplayName("Should have executed Flyway V1 to V8 migrations in flyway_schema_history")
 	void shouldHaveFlywayHistory() {
 		Integer migrationCount = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = true",
@@ -77,6 +77,11 @@ class PostgresIntegrationTest {
 				Integer.class
 		);
 		assertThat(v7Count).isNotNull().isEqualTo(1);
+		Integer v8Count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '8' AND success = true",
+				Integer.class
+		);
+		assertThat(v8Count).isNotNull().isEqualTo(1);
 	}
 
 	@Test

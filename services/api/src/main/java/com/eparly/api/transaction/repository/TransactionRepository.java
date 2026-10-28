@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,6 +40,13 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     Optional<Transaction> findByAccountIdAndFingerprint(UUID accountId, String fingerprint);
 
     boolean existsByAccountIdAndFingerprint(UUID accountId, String fingerprint);
+
+    /** Empreintes deja presentes dans un compte (lecture seule, a appeler apres controle de propriete du compte). */
+    @Query("select t.fingerprint from Transaction t where t.account.id = :accountId and t.fingerprint in :fingerprints")
+    List<String> findExistingFingerprints(
+            @Param("accountId") UUID accountId,
+            @Param("fingerprints") Collection<String> fingerprints
+    );
 
     List<Transaction> findAllByImportJobId(UUID importJobId);
 }
