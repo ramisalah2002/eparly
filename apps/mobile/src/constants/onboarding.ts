@@ -1,5 +1,3 @@
-import { ImageSourcePropType } from 'react-native';
-
 export const ONBOARDING_COLORS = {
   // Primary brand accents
   mutedLavender: '#A89BBE',

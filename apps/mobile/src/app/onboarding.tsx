@@ -33,6 +33,10 @@ const AnimatedFlatList = Animated.createAnimatedComponent(
   FlatList as new () => FlatList<OnboardingSlideItem>
 );
 
+const VIEWABILITY_CONFIG = {
+  itemVisiblePercentThreshold: 50,
+};
+
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -52,7 +56,7 @@ export default function OnboardingScreen() {
     },
   });
 
-  const onViewableItemsChanged = useRef<
+  const handleViewableItemsChanged = useCallback<
     NonNullable<FlatListProps<OnboardingSlideItem>['onViewableItemsChanged']>
   >(({ viewableItems }) => {
     if (
@@ -62,11 +66,7 @@ export default function OnboardingScreen() {
     ) {
       setCurrentIndex(viewableItems[0].index);
     }
-  }).current;
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-  }).current;
+  }, []);
 
   // Complete onboarding flow and persist state
   const handleFinishOnboarding = useCallback(async () => {
@@ -142,8 +142,8 @@ export default function OnboardingScreen() {
             bounces={false}
             scrollEventThrottle={16}
             onScroll={scrollHandler}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
+            onViewableItemsChanged={handleViewableItemsChanged}
+            viewabilityConfig={VIEWABILITY_CONFIG}
             getItemLayout={(_, index) => ({
               length: screenWidth,
               offset: screenWidth * index,

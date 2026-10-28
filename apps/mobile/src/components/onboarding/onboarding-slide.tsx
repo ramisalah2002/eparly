@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import React, { useEffect } from 'react';
-import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   Extrapolation,

@@ -7,9 +7,58 @@ Assistant financier intelligent qui analyse les transactions bancaires, détecte
 Ce dépôt est un monorepo contenant :
 
 - `apps/mobile/` : Application mobile React Native (Expo, TypeScript)
-- `apps/admin/` : Console d'administration
+- `apps/admin/` : Console d'administration Next.js (TypeScript, Tailwind CSS)
 - `services/api/` : Backend Spring Boot 4.1.2 (Java 21, Maven, Spring Data JPA, Flyway)
 - `infra/` : Infrastructure locale (Docker Compose, PostgreSQL 17)
+
+---
+
+## Intégration Continue (CI)
+
+Le projet utilise GitHub Actions (`.github/workflows/ci.yml`) pour valider automatiquement chaque push et pull request sur 3 jobs indépendants :
+
+| Job | Périmètre | Vérifications exécutées |
+| :--- | :--- | :--- |
+| **Mobile CI** | `apps/mobile` | Validation TypeScript (`tsc --noEmit`), ESLint (`expo lint`), et validation du bundle JS (`expo export`) |
+| **Admin CI** | `apps/admin` | ESLint (`eslint`), validation TypeScript (`tsc --noEmit`), et compilation de production Next.js (`next build`) |
+| **Backend CI** | `services/api` | Compilation Java 21, migrations Flyway, tests unitaires et d'intégration avec Testcontainers (PostgreSQL 17) |
+
+### Commandes locales avant de pousser
+
+Pour vérifier votre code en local avant d'ouvrir une Pull Request :
+
+#### Monorepo Frontend (Mobile & Admin)
+```bash
+# Vérification du typage TypeScript sur tous les packages frontend
+pnpm typecheck
+
+# Vérification du linting ESLint sur tous les packages frontend
+pnpm lint
+
+# Tester la compilation Next.js en production
+pnpm --filter admin build
+```
+
+#### Application Mobile
+```bash
+pnpm --filter mobile lint
+pnpm --filter mobile typecheck
+```
+
+#### Console Admin
+```bash
+pnpm --filter admin lint
+pnpm --filter admin typecheck
+pnpm --filter admin build
+```
+
+#### Backend API (Java 21 / Maven)
+```bash
+cd services/api
+./mvnw -B -ntp verify
+# Sous Windows PowerShell :
+.\mvnw.cmd -B -ntp verify
+```
 
 ---
 
