@@ -2,7 +2,6 @@ package com.eparly.api.imports;
 
 import com.eparly.api.TestJwtConfiguration;
 import com.eparly.api.account.domain.Account;
-import com.eparly.api.account.repository.AccountRepository;
 import com.eparly.api.user.domain.User;
 import com.eparly.api.user.domain.UserStatus;
 import com.eparly.api.user.repository.UserRepository;
@@ -36,6 +35,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.eparly.api.imports.ImportTestSupport.MAPPING_FR;
+import static com.eparly.api.imports.ImportTestSupport.createAccount;
 import static com.eparly.api.imports.ImportTestSupport.bearer;
 import static com.eparly.api.imports.ImportTestSupport.statement;
 import static com.eparly.api.imports.ImportTestSupport.utf8;
@@ -62,9 +62,6 @@ class ImportApiIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
-
-    @Autowired
     private JwtEncoder jwtEncoder;
 
     @Autowired
@@ -79,7 +76,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Preview : hash, mapping propose, echantillon, estimation, avertissement d'ambiguite et aucune ecriture en base")
     void previewReturnsReportAndWritesNothing() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement(
                 "04/03/2025;05/03/2025;PAIEMENT CB EXEMPLE;-45,50",
                 "06/03/2025;06/03/2025;VIREMENT RECU;1 250,00",
@@ -121,7 +118,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Preview : erreurs bloquantes numerotees par ligne et colonne, sans la valeur fautive")
     void previewReportsRowErrorsWithLineNumbers() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement(
                 "04/03/2025;;OK;-1,00",
                 "31/02/2025;;DATE IMPOSSIBLE;-1,00",
@@ -149,7 +146,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Preview : encodage Windows-1252 signale comme ambigu avec les candidats, ou resolu par un charset explicite")
     void previewFlagsAmbiguousCharset() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = statement("04/03/2025;;CAF\u00c9 CR\u00c8ME;-2,50").getBytes(Charset.forName("windows-1252"));
 
         mockMvc.perform(previewRequest(user, account.getId(), csv))
@@ -169,7 +166,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Preview : mapping personnalise applique, mapping avec colonne inconnue signale")
     void previewAppliesCustomMapping() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8("Jour;Intitul\u00e9;Somme\n04/03/2025;LOYER;-650,00\n");
         String mapping = "{\"dateColumn\":\"jour\",\"labelColumn\":\"INTITULE\",\"amountColumn\":\"somme\","
                 + "\"dateFormat\":\"dd/MM/yyyy\",\"amountFormat\":\"FR\"}";
@@ -192,7 +189,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Preview : colonnes debit/credit proposees automatiquement")
     void previewSupportsDebitCreditColumns() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8("Date;Libelle;Debit;Credit\n04/03/2025;ACHAT;45,50;\n05/03/2025;SALAIRE;;1 500,00\n");
 
         mockMvc.perform(previewRequest(user, account.getId(), csv))
@@ -220,7 +217,7 @@ class ImportApiIntegrationTest {
     void previewOnForeignOrUnknownAccountIsNeutral404() throws Exception {
         User owner = activeUser();
         User intruder = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(owner, "Compte prive"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, owner, "Compte prive");
         byte[] csv = utf8(statement("04/03/2025;;X;-1,00"));
 
         String foreign = mockMvc.perform(previewRequest(intruder, account.getId(), csv))
@@ -237,9 +234,12 @@ class ImportApiIntegrationTest {
     @Test
     @DisplayName("Preview par un utilisateur non actif : 403")
     void previewRejectsInactiveUser() throws Exception {
-        User user = userRepository.saveAndFlush(new User("imp-" + UUID.randomUUID() + "@eparly.test", "DummyPasswordHash2026!"));
-        assertThat(user.getStatus()).isNotEqualTo(UserStatus.ACTIVE);
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte"));
+        User user = new User("imp-" + UUID.randomUUID() + "@eparly.test", "DummyPasswordHash2026!");
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.saveAndFlush(user);
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte");
+        user.setStatus(UserStatus.PENDING_VERIFICATION);
+        userRepository.saveAndFlush(user);
 
         mockMvc.perform(previewRequest(user, account.getId(), utf8(statement("04/03/2025;;X;-1,00"))))
                 .andExpect(status().isForbidden());
@@ -251,7 +251,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Fichier vide : 400, fichier binaire renomme .csv : 415, fichier trop gros : 413")
     void previewRejectsUnusableFiles() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
 
         mockMvc.perform(previewRequest(user, account.getId(), new byte[0]))
                 .andExpect(status().isBadRequest())
@@ -283,7 +283,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Parametres invalides : fichier manquant, accountId invalide, mapping/charset/separateur invalides -> 400")
     void previewRejectsInvalidParameters() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement("04/03/2025;;X;-1,00"));
 
         mockMvc.perform(MockMvcRequestBuilders.multipart("/v1/imports/preview")
@@ -332,7 +332,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Mapping FR explicite : le mapping de reference des tests est accepte")
     void referenceMappingIsAccepted() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
 
         mockMvc.perform(previewRequest(user, account.getId(), utf8(statement("04/03/2025;;LOYER;-650,00")))
                         .param("mapping", MAPPING_FR))
@@ -347,7 +347,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Import valide : transactions persistees en centimes, job COMPLETED, consultable dans l'historique")
     void importPersistsTransactionsAndTracesJob() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement(
                 "04/03/2025;05/03/2025;PAIEMENT CB EXEMPLE;-45,50",
                 "06/03/2025;;VIREMENT RECU;1 250,00",
@@ -372,9 +372,13 @@ class ImportApiIntegrationTest {
         assertThat(jdbcTemplate.queryForList(
                 "SELECT transaction_type FROM transactions WHERE account_id = ? ORDER BY booking_date", String.class, account.getId()))
                 .containsExactly("EXPENSE", "UNKNOWN", "UNKNOWN");
+        // "VIREMENT RECU" est automatiquement catégorisé comme Virements, les 2 autres restent sans catégorie
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM transactions WHERE account_id = ? AND import_job_id = ?::uuid AND category_id IS NULL",
-                Long.class, account.getId(), jobId)).isEqualTo(3);
+                Long.class, account.getId(), jobId)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM transactions t JOIN categories c ON t.category_id = c.id WHERE t.account_id = ? AND t.import_job_id = ?::uuid AND c.name = 'Virements'",
+                Long.class, account.getId(), jobId)).isEqualTo(1);
         assertThat(body).doesNotContain("PAIEMENT CB EXEMPLE").doesNotContain("4550");
 
         mockMvc.perform(get("/v1/imports/" + jobId).header(HttpHeaders.AUTHORIZATION, bearer(jwtEncoder, user.getId())))
@@ -395,7 +399,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Reimport du meme fichier : job COMPLETED, 0 insere, N ignores")
     void reimportingSameFileInsertsNothing() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement("04/03/2025;;A;-1,00", "05/03/2025;;B;-2,00"));
 
         mockMvc.perform(importRequest(user, account.getId(), csv, MAPPING_FR, sha256(csv)))
@@ -420,7 +424,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Hash different de celui du fichier : 409 FILE_HASH_MISMATCH, rien n'est cree")
     void importRejectsHashMismatch() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] previewed = utf8(statement("04/03/2025;;A;-1,00"));
         byte[] modified = utf8(statement("04/03/2025;;A;-9999,00"));
 
@@ -436,7 +440,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Hash ou mapping absents : 400 ; mapping avec dateFormat AUTO refuse a l'import")
     void importRequiresHashAndExplicitMapping() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement("04/03/2025;;A;-1,00"));
 
         mockMvc.perform(importRequest(user, account.getId(), csv, MAPPING_FR, null))
@@ -457,7 +461,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Erreurs bloquantes : 422 avec rapport, aucune transaction, ImportJob FAILED trace sans donnee sensible")
     void importIsAtomicAndTracesFailedJob() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement(
                 "04/03/2025;;LIBELLE SECRET UN;-1,00",
                 "31/02/2025;;LIBELLE SECRET DEUX;-2,00",
@@ -495,7 +499,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Encodage ambigu : 400 CHARSET_REQUIRED a l'import tant que le charset n'est pas explicite")
     void importRequiresExplicitCharsetWhenAmbiguous() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = statement("04/03/2025;;CAF\u00c9;-2,50").getBytes(Charset.forName("windows-1252"));
 
         mockMvc.perform(importRequest(user, account.getId(), csv, MAPPING_FR, sha256(csv)))
@@ -516,7 +520,7 @@ class ImportApiIntegrationTest {
     void importIsIsolatedBetweenUsers() throws Exception {
         User owner = activeUser();
         User intruder = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(owner, "Compte prive"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, owner, "Compte prive");
         byte[] csv = utf8(statement("04/03/2025;;A;-1,00"));
 
         mockMvc.perform(importRequest(intruder, account.getId(), csv, MAPPING_FR, sha256(csv)))
@@ -539,8 +543,8 @@ class ImportApiIntegrationTest {
     void historyIsScopedToCurrentUser() throws Exception {
         User owner = activeUser();
         User other = activeUser();
-        Account ownerAccount = accountRepository.saveAndFlush(new Account(owner, "Compte A"));
-        Account otherAccount = accountRepository.saveAndFlush(new Account(other, "Compte B"));
+        Account ownerAccount = createAccount(mockMvc, jwtEncoder, objectMapper, owner, "Compte A");
+        Account otherAccount = createAccount(mockMvc, jwtEncoder, objectMapper, other, "Compte B");
         byte[] ownerCsv = utf8(statement("04/03/2025;;A;-1,00"));
         byte[] otherCsv = utf8(statement("04/03/2025;;B;-2,00"));
 
@@ -568,7 +572,7 @@ class ImportApiIntegrationTest {
     @DisplayName("Historique : pagination, tri createdAt decroissant, taille plafonnee a 100, parametres invalides en 400")
     void historyIsPaginatedAndSortedNewestFirst() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         List<String> jobIds = new ArrayList<>();
         for (int i = 1; i <= 3; i++) {
             jobIds.add(importedJobId(user, account, utf8(statement("0" + i + "/03/2025;;LIGNE " + i + ";-1,00"))));

@@ -2,7 +2,6 @@ package com.eparly.api.imports;
 
 import com.eparly.api.TestJwtConfiguration;
 import com.eparly.api.account.domain.Account;
-import com.eparly.api.account.repository.AccountRepository;
 import com.eparly.api.user.domain.User;
 import com.eparly.api.user.domain.UserStatus;
 import com.eparly.api.user.repository.UserRepository;
@@ -29,6 +28,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.eparly.api.imports.ImportTestSupport.MAPPING_FR;
+import static com.eparly.api.imports.ImportTestSupport.createAccount;
 import static com.eparly.api.imports.ImportTestSupport.statement;
 import static com.eparly.api.imports.ImportTestSupport.utf8;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,9 +60,6 @@ class ImportDeduplicationIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
-
-    @Autowired
     private JwtEncoder jwtEncoder;
 
     @Autowired
@@ -76,12 +73,12 @@ class ImportDeduplicationIntegrationTest {
     private Account account;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         http = new ImportHttpClient(mockMvc, jwtEncoder, objectMapper);
         User created = new User("dedup-" + UUID.randomUUID() + "@eparly.test", "DummyPasswordHash2026!");
         created.setStatus(UserStatus.ACTIVE);
         user = userRepository.saveAndFlush(created);
-        account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
     }
 
     @Test
@@ -247,7 +244,7 @@ class ImportDeduplicationIntegrationTest {
     @Test
     @DisplayName("Deduplication cloisonnee par compte : meme contenu dans deux comptes distincts")
     void deduplicationIsScopedToTheAccount() throws Exception {
-        Account other = accountRepository.saveAndFlush(new Account(user, "Livret"));
+        Account other = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Livret");
         byte[] csv = utf8(statement("04/03/2025;;VIREMENT;-100,00"));
 
         http.importOk(user, account.getId(), csv, MAPPING_FR);

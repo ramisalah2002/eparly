@@ -2,7 +2,6 @@ package com.eparly.api.imports;
 
 import com.eparly.api.TestJwtConfiguration;
 import com.eparly.api.account.domain.Account;
-import com.eparly.api.account.repository.AccountRepository;
 import com.eparly.api.user.domain.User;
 import com.eparly.api.user.domain.UserStatus;
 import com.eparly.api.user.repository.UserRepository;
@@ -34,6 +33,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static com.eparly.api.imports.ImportTestSupport.MAPPING_FR;
+import static com.eparly.api.imports.ImportTestSupport.createAccount;
 import static com.eparly.api.imports.ImportTestSupport.statement;
 import static com.eparly.api.imports.ImportTestSupport.utf8;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,9 +61,6 @@ class ImportConcurrencyIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
-
-    @Autowired
     private JwtEncoder jwtEncoder;
 
     @Autowired
@@ -76,7 +73,7 @@ class ImportConcurrencyIntegrationTest {
     @DisplayName("Plusieurs imports simultanes du meme fichier : N transactions au total, 'insere' cumule = N")
     void concurrentImportsOfTheSameFileDoNotDuplicate() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement(rows(1, 200, true)));
 
         List<JsonNode> jobs = runConcurrently(user, account, THREADS, index -> csv);
@@ -95,7 +92,7 @@ class ImportConcurrencyIntegrationTest {
     @DisplayName("Imports simultanes de releves qui se chevauchent : aucun doublon, total = union des operations")
     void concurrentOverlappingStatementsDoNotDuplicate() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] first = utf8(statement(rows(1, 150, false)));
         byte[] second = utf8(statement(rows(100, 250, false)));
 
@@ -110,7 +107,7 @@ class ImportConcurrencyIntegrationTest {
     @DisplayName("Imports simultanes avec doublons legitimes identiques : le rang d'occurrence reste coherent")
     void concurrentImportsWithIdenticalRowsStayConsistent() throws Exception {
         User user = activeUser();
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         byte[] csv = utf8(statement(
                 "04/03/2025;;CAFE;-2,50", "04/03/2025;;CAFE;-2,50", "04/03/2025;;CAFE;-2,50", "05/03/2025;;PAIN;-1,10"));
 
@@ -149,7 +146,9 @@ class ImportConcurrencyIntegrationTest {
         }
     }
 
-    /** Lignes distinctes numerotees de {@code from} a {@code to} inclus (libelle et montant uniques par ligne). */
+    /**
+     * Lignes distinctes numerotees de {@code from} a {@code to} inclus (libelle et montant uniques par ligne).
+     */
     private static String[] rows(int from, int to, boolean withValueDate) {
         List<String> lines = new ArrayList<>();
         for (int i = from; i <= to; i++) {

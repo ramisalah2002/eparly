@@ -19,7 +19,11 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     List<Account> findAllByUserId(UUID userId);
 
+    List<Account> findAllByUserIdOrderByCreatedAtAscIdAsc(UUID userId);
+
     boolean existsByIdAndUserId(UUID id, UUID userId);
 
     boolean existsByUserIdAndNameIgnoreCase(UUID userId, String name);
+
+    boolean existsByUserIdAndNameIgnoreCaseAndIdNot(UUID userId, String name, UUID id);
 }

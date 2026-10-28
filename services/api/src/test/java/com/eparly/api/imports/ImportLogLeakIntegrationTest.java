@@ -7,7 +7,6 @@ import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.core.read.ListAppender;
 import com.eparly.api.TestJwtConfiguration;
 import com.eparly.api.account.domain.Account;
-import com.eparly.api.account.repository.AccountRepository;
 import com.eparly.api.user.domain.User;
 import com.eparly.api.user.domain.UserStatus;
 import com.eparly.api.user.repository.UserRepository;
@@ -31,6 +30,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.eparly.api.imports.ImportTestSupport.MAPPING_FR;
+import static com.eparly.api.imports.ImportTestSupport.createAccount;
 import static com.eparly.api.imports.ImportTestSupport.statement;
 import static com.eparly.api.imports.ImportTestSupport.utf8;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,9 +63,6 @@ class ImportLogLeakIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
-
-    @Autowired
     private JwtEncoder jwtEncoder;
 
     @Autowired
@@ -77,7 +74,7 @@ class ImportLogLeakIntegrationTest {
         User created = new User("log-" + UUID.randomUUID() + "@eparly.test", "DummyPasswordHash2026!");
         created.setStatus(UserStatus.ACTIVE);
         User user = userRepository.saveAndFlush(created);
-        Account account = accountRepository.saveAndFlush(new Account(user, "Compte courant"));
+        Account account = createAccount(mockMvc, jwtEncoder, objectMapper, user, "Compte courant");
         ImportHttpClient http = new ImportHttpClient(mockMvc, jwtEncoder, objectMapper);
 
         byte[] valid = utf8(statement("04/03/2025;;" + SECRET_LABEL + ";-" + SECRET_AMOUNT_TEXT));

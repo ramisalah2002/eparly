@@ -1,6 +1,6 @@
 package com.eparly.api.imports.api;
 
-import com.eparly.api.auth.exception.ApiException;
+import com.eparly.api.auth.service.JwtUserId;
 import com.eparly.api.imports.dto.ImportMappingDto;
 import com.eparly.api.imports.mapper.ImportMapping;
 import com.eparly.api.imports.parser.CsvCharset;
@@ -32,11 +32,7 @@ class ImportRequestParser {
     }
 
     static UUID userId(Jwt jwt) {
-        try {
-            return UUID.fromString(jwt.getSubject());
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid access token");
-        }
+        return JwtUserId.from(jwt);
     }
 
     ImportCommand toCommand(

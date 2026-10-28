@@ -1,5 +1,13 @@
 package com.eparly.api.imports;
 
+import com.eparly.api.account.domain.Account;
+import com.eparly.api.user.domain.User;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -10,6 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Utilitaires communs aux tests d'integration des imports (JWT signe avec la cle de test, CSV fictifs).
@@ -38,7 +49,23 @@ final class ImportTestSupport {
         return text.getBytes(StandardCharsets.UTF_8);
     }
 
-    /** Releve fictif au format francais (UTF-8, point-virgule, dates dd/MM/yyyy, montants a virgule). */
+    static Account createAccount(MockMvc mockMvc, JwtEncoder encoder, ObjectMapper objectMapper,
+                                 User user, String name) throws Exception {
+        String response = mockMvc.perform(post("/v1/accounts")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(encoder, user.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("name", name))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode json = objectMapper.readTree(response);
+        Account account = new Account(user, name);
+        account.setId(UUID.fromString(json.get("id").asText()));
+        return account;
+    }
+
+    /**
+     * Releve fictif au format francais (UTF-8, point-virgule, dates dd/MM/yyyy, montants a virgule).
+     */
     static String statement(String... lines) {
         StringBuilder csv = new StringBuilder("Date operation;Date valeur;Libell\u00e9;Montant\n");
         for (String line : lines) {

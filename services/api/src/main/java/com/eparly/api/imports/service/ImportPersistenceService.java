@@ -1,10 +1,13 @@
 package com.eparly.api.imports.service;
 
 import com.eparly.api.account.repository.AccountRepository;
+import com.eparly.api.category.classification.CategoryClassificationService;
+import com.eparly.api.category.domain.Category;
 import com.eparly.api.imports.domain.ImportJob;
 import com.eparly.api.imports.domain.ImportJobStatus;
 import com.eparly.api.imports.dto.ImportJobResponse;
 import com.eparly.api.imports.repository.ImportJobRepository;
+import com.eparly.api.transaction.repository.TransactionRepository;
 import com.eparly.api.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Types;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -24,9 +28,10 @@ import java.util.UUID;
  *   <li>creation de l'ImportJob (utilisateur et compte issus de l'entite autorisee, verifies par V8) ;</li>
  *   <li>insertion native {@code ON CONFLICT DO NOTHING} (couvre uq_transactions_account_fingerprint et l'index
  *       partiel sur source_uid) : le nombre de lignes affectees donne les insertions, le reste est ignore ;</li>
+ *   <li>catégorisation automatique des nouvelles transactions par le moteur deterministe ;</li>
  *   <li>cloture du job avec des compteurs exacts.</li>
  * </ol>
- * Les categories ne sont pas affectees a l'import. Aucun libelle ni montant n'est journalise.
+ * Aucun libelle ni montant n'est journalise.
  */
 @Service
 public class ImportPersistenceService {
@@ -41,21 +46,27 @@ public class ImportPersistenceService {
     private final ImportJobRepository importJobRepository;
     private final UserRepository userRepository;
     private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ImportProperties properties;
+    private final CategoryClassificationService classificationService;
 
     public ImportPersistenceService(
             ImportJobRepository importJobRepository,
             UserRepository userRepository,
             AccountRepository accountRepository,
+            TransactionRepository transactionRepository,
             JdbcTemplate jdbcTemplate,
-            ImportProperties properties
+            ImportProperties properties,
+            CategoryClassificationService classificationService
     ) {
         this.importJobRepository = importJobRepository;
         this.userRepository = userRepository;
         this.accountRepository = accountRepository;
+        this.transactionRepository = transactionRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.properties = properties;
+        this.classificationService = classificationService;
     }
 
     @Transactional
@@ -81,10 +92,33 @@ public class ImportPersistenceService {
         }
         int skipped = candidates.size() - inserted;
 
+        // Catégorisation automatique des nouvelles transactions
+        classifyNewTransactions(job.getId(), candidates);
+
         job.markCompleted(totalRows, inserted, skipped, 0);
         importJobRepository.saveAndFlush(job);
         log.info("Import completed: job={}, total={}, inserted={}, skipped={}", job.getId(), totalRows, inserted, skipped);
         return ImportJobResponse.from(job);
+    }
+
+    /**
+     * Applique la catégorisation automatique uniquement aux transactions nouvellement insérées.
+     * Ne modifie jamais customCategoryFlag, montant, date, compte ou fingerprint.
+     */
+    private void classifyNewTransactions(UUID jobId, List<ImportCandidate> candidates) {
+        // Pour chaque candidate, classifier et mettre à jour si une règle s'applique
+        for (ImportCandidate candidate : candidates) {
+            Optional<Category> category = classificationService.classify(candidate.normalizedLabel());
+            if (category.isPresent()) {
+                // UPDATE uniquement si la transaction n'a pas déjà de catégorie
+                // et si elle appartient bien à ce job (donc nouvellement insérée)
+                int updated = jdbcTemplate.update(
+                        "UPDATE transactions SET category_id = ? "
+                                + "WHERE import_job_id = ? AND fingerprint = ? AND category_id IS NULL",
+                        category.get().getId(), jobId, candidate.fingerprint());
+                // updated == 0 signifie que la transaction n'a pas été insérée (déduplicat)
+            }
+        }
     }
 
     private void acquireAccountLock(UUID accountId) {
