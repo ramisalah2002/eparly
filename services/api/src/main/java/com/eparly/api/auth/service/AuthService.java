@@ -285,9 +285,8 @@ public class AuthService {
 
     private void issueVerificationToken(User user, boolean neutralOnDeliveryFailure) {
         verificationTokenRepository.deleteByUser_IdAndUsedAtIsNull(user.getId());
-        byte[] random = new byte[TOKEN_BYTES];
-        secureRandom.nextBytes(random);
-        String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+        int code = secureRandom.nextInt(1_000_000);
+        String rawToken = String.format("%06d", code);
         EmailVerificationToken token = new EmailVerificationToken(
                 user, hashToken(rawToken), clock.instant().plus(verificationTokenTtl)
         );

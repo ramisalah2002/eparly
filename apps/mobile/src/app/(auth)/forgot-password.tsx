@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MailIcon } from '@/components/auth/auth-icons';
 import { PastelBackground } from '@/components/onboarding/pastel-background';
 import { BRAND_COLORS } from '@/constants/colors';
+import { getApiBaseUrl } from '@/services/auth-api';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -71,9 +72,7 @@ export default function ForgotPasswordScreen() {
 
     setIsLoading(true);
     try {
-      const baseUrl =
-        process.env.EXPO_PUBLIC_API_URL ||
-        (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
+      const baseUrl = getApiBaseUrl();
       await fetch(`${baseUrl}/v1/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

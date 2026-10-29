@@ -25,9 +25,9 @@ public class VerificationEmailSender {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);
         message.setTo(recipient);
-        message.setSubject("Vérifiez votre adresse email Eparly");
-        message.setText("Pour vérifier votre adresse email, utilisez ce jeton dans l'application :\n\n"
-                + token + "\n\nLe jeton expire selon la durée indiquée et ne peut être utilisé qu'une fois.\n"
+        message.setSubject("Votre code de vérification Eparly : " + token);
+        message.setText("Bienvenue sur Eparly !\n\nPour vérifier votre adresse email, voici votre code à 6 chiffres :\n\n"
+                + token + "\n\nCe code expire selon la durée indiquée et ne peut être utilisé qu'une fois.\n"
                 + verificationUrl);
         mailSender.send(message);
     }

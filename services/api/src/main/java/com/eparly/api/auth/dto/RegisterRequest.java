@@ -9,9 +9,9 @@ import jakarta.validation.constraints.Size;
 public record RegisterRequest(
         @Schema(example = "alex.martin@example.com", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank @Email @Size(max = 255) String email,
-        @Schema(example = "Correct-Horse-Battery-42!", requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "12 à 128 caractères")
-        @NotBlank @Size(min = 12, max = 128) String password,
+        @Schema(example = "Secret123!", requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "8 à 128 caractères")
+        @NotBlank @Size(min = 8, max = 128) String password,
         @Schema(example = "true", requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Acceptation des conditions d'utilisation")
         boolean termsAccepted,

@@ -9,8 +9,8 @@ public record ResetPasswordRequest(
         @Schema(example = "dGhpcy1pcy1hLXNhbXBsZS10b2tlbi12YWx1ZQ", requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Jeton de réinitialisation à usage unique")
         @NotBlank String token,
-        @Schema(example = "New-Correct-Horse-Battery-42!", requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "Nouveau mot de passe (12 à 128 caractères)")
-        @NotBlank @Size(min = 12, max = 128) String newPassword
+        @Schema(example = "Secret123!", requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Nouveau mot de passe (8 à 128 caractères)")
+        @NotBlank @Size(min = 8, max = 128) String newPassword
 ) {
 }

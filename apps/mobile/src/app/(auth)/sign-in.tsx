@@ -30,7 +30,7 @@ import {
 } from '@/components/auth/auth-icons';
 import { PastelBackground } from '@/components/onboarding/pastel-background';
 import { BRAND_COLORS } from '@/constants/colors';
-import { loginToApi } from '@/services/auth-api';
+import { useAuth } from '@/context/auth-context';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -100,13 +100,15 @@ export default function SignInScreen() {
     if (!password) {
       setPasswordError('Password is required');
       isValid = false;
-    } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    } else if (password.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
       isValid = false;
     }
 
     return isValid;
   };
+
+  const { signIn } = useAuth();
 
   // Handle Form Submission
   const handleSignIn = async () => {
@@ -117,7 +119,7 @@ export default function SignInScreen() {
     setServerError(null);
 
     try {
-      const result = await loginToApi({
+      const result = await signIn({
         email: identifier.trim(),
         password,
       });
@@ -125,7 +127,7 @@ export default function SignInScreen() {
       if (result.success) {
         router.replace('/(tabs)');
       } else {
-        setServerError(result.error);
+        setServerError(result.error || 'Invalid credentials. Please try again.');
       }
     } catch {
       setServerError('An unexpected error occurred. Please try again.');

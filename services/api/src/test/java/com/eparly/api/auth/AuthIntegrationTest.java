@@ -586,7 +586,7 @@ class AuthIntegrationTest {
     }
 
     private static String tokenFrom(SimpleMailMessage message) {
-        Matcher matcher = Pattern.compile("(?m)^([A-Za-z0-9_-]{43})$").matcher(message.getText());
+        Matcher matcher = Pattern.compile("(?m)^([0-9]{6})$").matcher(message.getText());
         assertThat(matcher.find()).isTrue();
         return matcher.group(1);
     }

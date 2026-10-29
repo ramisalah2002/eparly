@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EparlyLogo } from '@/components/eparly-logo';
 import { ThemedText } from '@/components/themed-text';
 import { getHasCompletedOnboarding } from '@/services/onboarding-storage';
+import { getAccessToken } from '@/services/session-storage';
 
 const SPLASH_BG_COLOR = '#FFFFFF';
 const BRAND_GREEN = '#16A085';
@@ -28,6 +29,7 @@ export default function SplashScreenComponent() {
   const isMounted = useRef(true);
   const systemReducedMotion = useReducedMotion();
   const hasCompletedOnboardingRef = useRef(false);
+  const isAuthenticatedRef = useRef(false);
 
   // Animation values
   const logoOpacity = useSharedValue(0);
@@ -42,13 +44,18 @@ export default function SplashScreenComponent() {
   useEffect(() => {
     isMounted.current = true;
 
-    // Asynchronously pre-fetch onboarding completion state during splash animation
-    getHasCompletedOnboarding()
-      .then((completed) => {
+    // Asynchronously pre-fetch session and onboarding state during splash animation
+    Promise.all([
+      getHasCompletedOnboarding(),
+      getAccessToken(),
+    ])
+      .then(([completed, token]) => {
         hasCompletedOnboardingRef.current = completed;
+        isAuthenticatedRef.current = Boolean(token);
       })
       .catch(() => {
         hasCompletedOnboardingRef.current = false;
+        isAuthenticatedRef.current = false;
       });
 
     let navTimer: ReturnType<typeof setTimeout> | null = null;
@@ -57,8 +64,10 @@ export default function SplashScreenComponent() {
     const navigateToNextScreen = () => {
       if (hasNavigated.current || !isMounted.current) return;
       hasNavigated.current = true;
-      if (hasCompletedOnboardingRef.current) {
-        router.replace('/welcome');
+      if (isAuthenticatedRef.current) {
+        router.replace('/(tabs)');
+      } else if (hasCompletedOnboardingRef.current) {
+        router.replace('/(auth)/sign-in');
       } else {
         router.replace('/onboarding');
       }

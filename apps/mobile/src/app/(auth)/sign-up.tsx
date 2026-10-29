@@ -4,7 +4,6 @@ import { Image } from 'expo-image';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   Platform,
   Pressable,
@@ -30,6 +29,7 @@ import {
 } from '@/components/auth/auth-icons';
 import { PastelBackground } from '@/components/onboarding/pastel-background';
 import { BRAND_COLORS } from '@/constants/colors';
+import { useAuth } from '@/context/auth-context';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -38,6 +38,7 @@ export default function SignUpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
+  const { signUp } = useAuth();
 
   // Form states
   const [fullName, setFullName] = useState('');
@@ -53,6 +54,7 @@ export default function SignUpScreen() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Press animation feedback
@@ -77,6 +79,7 @@ export default function SignUpScreen() {
     setNameError(null);
     setEmailError(null);
     setPasswordError(null);
+    setServerError(null);
 
     if (!fullName.trim()) {
       setNameError('Full name is required');
@@ -95,27 +98,46 @@ export default function SignUpScreen() {
     if (!password) {
       setPasswordError('Password is required');
       valid = false;
-    } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    } else if (password.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
       valid = false;
     }
 
     return valid;
   };
 
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     if (isLoading) return;
     if (!validate()) return;
 
     setIsLoading(true);
-    setTimeout(() => {
+    setServerError(null);
+
+    try {
+      const res = await signUp({
+        email: email.trim(),
+        password,
+        termsAccepted: true,
+        marketingConsent: false,
+      });
+
+      if (res.success) {
+        // Navigate to dedicated 6-digit OTP verification screen
+        router.push({
+          pathname: '/(auth)/otp-verification',
+          params: {
+            email: email.trim(),
+            password,
+          },
+        });
+      } else {
+        setServerError(res.error || 'Failed to create account.');
+      }
+    } catch {
+      setServerError('An unexpected error occurred. Please check your network.');
+    } finally {
       setIsLoading(false);
-      Alert.alert(
-        'Account Registration',
-        'Account creation will connect to your email verification endpoint in the next phase.',
-        [{ text: 'OK' }]
-      );
-    }, 600);
+    }
   };
 
   // Responsive illustration height: decreased by 20%
@@ -159,13 +181,19 @@ export default function SignUpScreen() {
               />
             </View>
 
-            {/* Heading & Subtitle */}
+            {/* Heading */}
             <View style={styles.headingSection}>
               <Text style={styles.title}>Sign Up</Text>
             </View>
 
             {/* Form Section */}
             <View style={styles.formSection}>
+              {serverError && (
+                <View style={styles.errorAlert} accessibilityRole="alert">
+                  <Text style={styles.errorAlertText}>{serverError}</Text>
+                </View>
+              )}
+
               {/* Input 1: Full name with Person icon */}
               <View style={styles.inputGroup}>
                 <View
@@ -241,7 +269,7 @@ export default function SignUpScreen() {
                 )}
               </View>
 
-              {/* Input 3: Password with Lock icon & Eye toggle */}
+              {/* Input 3: Password with Lock icon & Eyelash Eye Toggle icon */}
               <View style={styles.inputGroup}>
                 <View
                   style={[
@@ -263,7 +291,7 @@ export default function SignUpScreen() {
                     }}
                     onFocus={() => setPasswordFocused(true)}
                     onBlur={() => setPasswordFocused(false)}
-                    placeholder="Password"
+                    placeholder="Password (min 8 characters)"
                     placeholderTextColor="#9EA0AA"
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
@@ -408,20 +436,24 @@ const styles = StyleSheet.create({
       default: 'system-ui',
     }),
   },
-  subtitle: {
-    fontSize: 13.5,
-    color: BRAND_COLORS.secondaryText,
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'sans-serif',
-      default: 'system-ui',
-    }),
-  },
   formSection: {
     width: '100%',
+  },
+  errorAlert: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.22)',
+    marginBottom: 10,
+  },
+  errorAlertText: {
+    color: '#B91C1C',
+    fontSize: 12.5,
+    fontWeight: '500',
+    lineHeight: 17,
+    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: 12,
@@ -468,18 +500,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   termsContainer: {
-    paddingHorizontal: 12,
-    marginVertical: 14,
-    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 16,
+    marginTop: 2,
   },
   termsText: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: BRAND_COLORS.secondaryText,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 17,
   },
   termsHighlight: {
-    fontWeight: '700',
+    fontWeight: '600',
     color: BRAND_COLORS.darkCharcoal,
   },
   createBtnWrapper: {
@@ -492,11 +524,17 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND_COLORS.mutedLavender,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: BRAND_COLORS.mutedLavender,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: BRAND_COLORS.mutedLavender,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.22,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   createBtnDisabled: {
     opacity: 0.75,
