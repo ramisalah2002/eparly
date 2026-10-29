@@ -147,7 +147,7 @@ class PasswordResetAndSecurityIntegrationTest {
         assertThat(mail.getTo()).containsExactly(email);
         assertThat(mail.getSubject()).contains("Réinitialisation");
         String rawToken = tokenFrom(mail);
-        assertThat(rawToken).hasSize(43);
+        assertThat(rawToken).hasSize(6);
         assertThat(mail.getText()).doesNotContain(INITIAL_PASSWORD, NEW_PASSWORD);
         assertThat(mail.getText()).contains("http://localhost/test-reset-password");
 
@@ -511,6 +511,36 @@ class PasswordResetAndSecurityIntegrationTest {
         assertThat(passwordResetTokenRepository.findById(expiredId)).isEmpty();
     }
 
+    @Test
+    @DisplayName("Vérification du code de réinitialisation : code valide accepté, code invalide rejeté")
+    void verifyResetCodeEndpoint() throws Exception {
+        String email = uniqueEmail();
+        createActiveUser(email, INITIAL_PASSWORD);
+
+        mockMvc.perform(post("/v1/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender, atLeastOnce()).send(captor.capture());
+        String code = tokenFrom(captor.getValue());
+
+        // Code invalide
+        mockMvc.perform(post("/v1/auth/verify-reset-code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"000000\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Password reset code is invalid or expired"));
+
+        // Code valide
+        mockMvc.perform(post("/v1/auth/verify-reset-code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Reset code is valid"));
+    }
+
     // -------------------------------------------------------------------------
     // Méthodes utilitaires
     // -------------------------------------------------------------------------
@@ -537,7 +567,7 @@ class PasswordResetAndSecurityIntegrationTest {
     }
 
     private static String tokenFrom(SimpleMailMessage message) {
-        Matcher matcher = Pattern.compile("(?m)^([A-Za-z0-9_-]{43})$").matcher(message.getText());
+        Matcher matcher = Pattern.compile("(?m)^([0-9]{6})$").matcher(message.getText());
         assertThat(matcher.find()).isTrue();
         return matcher.group(1);
     }

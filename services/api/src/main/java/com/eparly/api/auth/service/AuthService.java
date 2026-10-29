@@ -215,9 +215,8 @@ public class AuthService {
             User user = userOptional.get();
             if (user.getStatus() == UserStatus.ACTIVE) {
                 passwordResetTokenRepository.deleteByUser_IdAndUsedAtIsNull(user.getId());
-                byte[] random = new byte[TOKEN_BYTES];
-                secureRandom.nextBytes(random);
-                String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+                int code = secureRandom.nextInt(1_000_000);
+                String rawToken = String.format("%06d", code);
                 PasswordResetToken token = new PasswordResetToken(
                         user, hashToken(rawToken), clock.instant().plus(passwordResetProperties.ttl())
                 );
@@ -230,10 +229,22 @@ public class AuthService {
             }
         } else {
             // Neutralité temporelle pour éviter l'énumération par analyse des temps de réponse
-            byte[] dummy = new byte[TOKEN_BYTES];
-            secureRandom.nextBytes(dummy);
-            hashToken(Base64.getUrlEncoder().withoutPadding().encodeToString(dummy));
+            int dummy = secureRandom.nextInt(1_000_000);
+            hashToken(String.format("%06d", dummy));
         }
+    }
+
+    public void verifyResetCode(String code) {
+        verifyResetCode(code, "127.0.0.1");
+    }
+
+    @Transactional(readOnly = true)
+    public void verifyResetCode(String code, String clientIp) {
+        rateLimiter.checkResetPassword(clientIp);
+        String tokenHash = hashToken(code.trim());
+        passwordResetTokenRepository.findByTokenHash(tokenHash)
+                .filter(token -> !token.isUsed() && token.getExpiresAt().isAfter(clock.instant()))
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Password reset code is invalid or expired"));
     }
 
     public void resetPassword(ResetPasswordRequest request) {
