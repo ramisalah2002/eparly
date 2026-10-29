@@ -6,8 +6,10 @@ import com.eparly.api.offer.domain.CommercialOffer;
 import com.eparly.api.offer.domain.EvidenceStatus;
 import com.eparly.api.offer.domain.OfferBillingPeriod;
 import com.eparly.api.offer.domain.OfferEvidence;
+import com.eparly.api.offer.domain.OfferEvidenceScope;
 import com.eparly.api.offer.domain.OfferPricing;
 import com.eparly.api.offer.domain.OfferProvider;
+import com.eparly.api.offer.domain.PromotionPriceType;
 import com.eparly.api.offer.domain.OfferSector;
 import com.eparly.api.offer.domain.OfferStatus;
 import com.eparly.api.offer.domain.ProviderStatus;
@@ -177,7 +179,16 @@ class ComparisonIntegrationTest {
         e.setVerifiedSummary("Verifie");
         e.setVerificationStatus(status);
         e.setProvenance("Test");
+        e.setVerifiedPricingVersion(pricingRepository.findByOfferId(offer.getId())
+                .map(OfferPricing::getVersion).orElse(null));
+        e.setVerifiedProviderVersion(offer.getProvider().getVersion());
         return evidenceRepository.saveAndFlush(e);
+    }
+
+    private OfferEvidence createPromotionEvidence(CommercialOffer offer, String url) {
+        OfferEvidence evidence = createEvidence(offer, url, EvidenceStatus.VERIFIED);
+        evidence.setEvidenceScope(OfferEvidenceScope.PROMOTION);
+        return evidenceRepository.saveAndFlush(evidence);
     }
 
     private String evalBody(UUID subscriptionId, OfferSector sector, Map<String, Object> requirements) {
@@ -559,21 +570,24 @@ class ComparisonIntegrationTest {
                 null, "Aucun engagement", "FR", LocalDate.now(), LocalDate.now().plusYears(1), OfferStatus.VERIFIED);
         OfferPricing pricing = createPricing(offer, 2999L, OfferBillingPeriod.MONTHLY);
         pricing.setPromotionPercent(20);
+        pricing.setPromotionPriceType(PromotionPriceType.PERCENTAGE);
         pricing.setPromotionDurationMonths(12);
-        pricing.setPriceAfterPromotionMinor(2399L);
+        pricing.setPriceAfterPromotionMinor(null);
         pricingRepository.saveAndFlush(pricing);
         createEvidence(offer, "https://mobile-alt7.com/promo", EvidenceStatus.VERIFIED);
+        createPromotionEvidence(offer, "https://mobile-alt7.com/promo-conditions");
 
         JsonNode resp = doEvaluate(user, sub.getId(), OfferSector.MOBILE_PLAN,
                 Map.of("minDataGb", 100));
         assertThat(hasOffer(resp, "compatibleOffers", "Promo 12 mois")).isTrue();
         assertThat(resp.path("compatibleOffers").get(0).path("promotionPercent").asInt()).isEqualTo(20);
+        assertThat(resp.path("compatibleOffers").get(0).path("promotionVerified").asBoolean()).isTrue();
     }
 
     /* ---------- 14. Frais annexes inconnus ---------- */
 
     @Test
-    @DisplayName("14. Frais annexes inconnus")
+    @DisplayName("14. Tarification marquée inconnue exclue du catalogue")
     void unknownAncillaryFees() throws Exception {
         User user = activeUser("mobile8@eparly.test");
         Account account = createAccount(user, "Compte");
@@ -592,7 +606,8 @@ class ComparisonIntegrationTest {
 
         JsonNode resp = doEvaluate(user, sub.getId(), OfferSector.MOBILE_PLAN,
                 Map.of("minDataGb", 100));
-        assertThat(hasOffer(resp, "compatibleOffers", "Frais ?")).isTrue();
+        assertThat(hasOffer(resp, "compatibleOffers", "Frais ?")).isFalse();
+        assertThat(resp.path("totalEligibleOffers").asInt()).isZero();
     }
 
     /* ---------- 15. Offre expirée ---------- */
@@ -631,6 +646,7 @@ class ComparisonIntegrationTest {
                 null, "Aucun engagement", "FR", LocalDate.now(), LocalDate.now().plusYears(1), OfferStatus.VERIFIED);
         createPricing(offer, 1999L, OfferBillingPeriod.MONTHLY);
         OfferEvidence evidence = createEvidence(offer, "https://mobile-alt10.com/stale", EvidenceStatus.VERIFIED);
+        evidence.setConsultedAt(Instant.now().minus(40, ChronoUnit.DAYS));
         evidence.setVerifiedAt(Instant.now().minus(40, ChronoUnit.DAYS));
         evidenceRepository.saveAndFlush(evidence);
 
@@ -937,6 +953,93 @@ class ComparisonIntegrationTest {
         assertThat(compatible).isNotNull();
         assertThat(compatible.size()).isGreaterThan(0);
         assertThat(compatible.get(0).path("savings").isMissingNode()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Les critères inconnus, mal typés et hors plage sont rejetés")
+    void invalidCriteriaAreRejectedBeforeEvaluation() throws Exception {
+        User user = activeUser("invalid-criteria@eparly.test");
+        Account account = createAccount(user, "Compte");
+        Subscription sub = createSubscription(user, account, "Mobile", "Actuel");
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.MOBILE_PLAN, Map.of("unknownMobile", true))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.MOBILE_PLAN, Map.of("requires5G", "true"))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.MOBILE_PLAN,
+                                Map.of("minDataGb", 100, "minRoamingDataGb", -1))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.MOBILE_PLAN, Map.of("roamingCountries", List.of("FR")))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.STREAMING, Map.of("unknownStreaming", true))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.STREAMING, Map.of("minScreens", "2"))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.STREAMING, Map.of("minScreens", 0))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/v1/comparisons/evaluate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(evalBody(sub.getId(), OfferSector.INTERNET_BOX, Map.of("minScreens", 2))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Les offres futures et celles dont le fournisseur est inactif sont exclues")
+    void futureAndInactiveOffersAreExcluded() throws Exception {
+        User user = activeUser("unavailable-offers@eparly.test");
+        Account account = createAccount(user, "Compte");
+        Subscription sub = createSubscription(user, account, "Mobile", "Actuel");
+
+        OfferProvider inactiveProvider = createProvider("InactiveMobile", OfferSector.MOBILE_PLAN,
+                "https://inactive-mobile.example");
+        inactiveProvider.setStatus(ProviderStatus.INACTIVE);
+        providerRepository.saveAndFlush(inactiveProvider);
+        CommercialOffer inactiveOffer = createOffer(inactiveProvider, "Inactive Offer", OfferSector.MOBILE_PLAN,
+                "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
+                LocalDate.now(), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+        createPricing(inactiveOffer, 999L, OfferBillingPeriod.MONTHLY);
+        createEvidence(inactiveOffer, "https://inactive-mobile.example/offer", EvidenceStatus.VERIFIED);
+
+        OfferProvider futureProvider = createProvider("FutureMobile", OfferSector.MOBILE_PLAN,
+                "https://future-mobile.example");
+        CommercialOffer futureOffer = createOffer(futureProvider, "Future Offer", OfferSector.MOBILE_PLAN,
+                "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
+                LocalDate.now().plusDays(1), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+        createPricing(futureOffer, 999L, OfferBillingPeriod.MONTHLY);
+        createEvidence(futureOffer, "https://future-mobile.example/offer", EvidenceStatus.VERIFIED);
+
+        JsonNode response = doEvaluate(user, sub.getId(), OfferSector.MOBILE_PLAN, Map.of("minDataGb", 100));
+        assertThat(response.path("totalEligibleOffers").asInt()).isZero();
+        assertThat(response.path("compatibleOffers")).isEmpty();
     }
 
     /* ---------- Critères endpoint ---------- */

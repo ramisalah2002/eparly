@@ -185,8 +185,14 @@ class SavingsIntegrationTest {
         p.setBillingPeriod(period);
         // 0L = aucun frais d'activation connu (valeur connue, pas inconnue)
         p.setActivationFeeMinor(activationFee != null ? activationFee : 0L);
-        p.setPriceAfterPromotionMinor(priceAfterPromo);
         p.setPromotionPercent(promoPercent);
+        if (promoPercent != null) {
+            p.setPromotionPriceType(PromotionPriceType.PERCENTAGE);
+            p.setPriceAfterPromotionMinor(null);
+        } else {
+            p.setPromotionPriceType(priceAfterPromo != null ? PromotionPriceType.FIXED_PRICE : null);
+            p.setPriceAfterPromotionMinor(priceAfterPromo);
+        }
         p.setPromotionDurationMonths(promoDurationMonths);
         p.setTaxesIncluded(true);
         p.setDataUnknown(false);
@@ -203,7 +209,16 @@ class SavingsIntegrationTest {
         e.setVerifiedSummary("Verifie");
         e.setVerificationStatus(status);
         e.setProvenance("Test");
+        e.setVerifiedPricingVersion(pricingRepository.findByOfferId(offer.getId())
+                .map(OfferPricing::getVersion).orElse(null));
+        e.setVerifiedProviderVersion(offer.getProvider().getVersion());
         return evidenceRepository.saveAndFlush(e);
+    }
+
+    private OfferEvidence createPromotionEvidence(CommercialOffer offer, String url) {
+        OfferEvidence evidence = createEvidence(offer, url, EvidenceStatus.VERIFIED);
+        evidence.setEvidenceScope(OfferEvidenceScope.PROMOTION);
+        return evidenceRepository.saveAndFlush(evidence);
     }
 
     private String evalBody(UUID subscriptionId, UUID offerId, OfferSector sector, Integer horizonMonths,
@@ -373,8 +388,9 @@ class SavingsIntegrationTest {
                 "{\"dataGb\":200,\"network5G\":true,\"commitment\":\"Aucun engagement\"}",
                 null, "Aucun engagement", "FR", LocalDate.now(), LocalDate.now().plusYears(1), OfferStatus.VERIFIED);
         // Prix normal 1999, promo -50% pendant 3 mois => 999 pendant 3 mois, puis 1999
-        createPricing(offer, 1999L, OfferBillingPeriod.MONTHLY, null, 1999L, 50, 3);
+        createPricing(offer, 1999L, OfferBillingPeriod.MONTHLY, null, null, 50, 3);
         createEvidence(offer, "https://mobile-alt6.com/promo", EvidenceStatus.VERIFIED);
+        createPromotionEvidence(offer, "https://mobile-alt6.com/promo-conditions");
 
         JsonNode resp = doEvaluate(user, sub.getId(), offer.getId(), OfferSector.MOBILE_PLAN,
                 12, Map.of("minDataGb", 100, "requires5G", true), null, null);
@@ -445,18 +461,19 @@ class SavingsIntegrationTest {
                 RecurringFrequency.MONTHLY, SubscriptionStatus.ACTIVE);
 
         OfferProvider provider = createProvider("MobileAlt9", OfferSector.MOBILE_PLAN, "https://mobile-alt9.com");
-        CommercialOffer offer = createOffer(provider, "Sans Activation", OfferSector.MOBILE_PLAN,
+        CommercialOffer offer = createOffer(provider, "Frais Combinés", OfferSector.MOBILE_PLAN,
                 "{\"dataGb\":200,\"network5G\":true,\"commitment\":\"Aucun engagement\"}",
                 null, "Aucun engagement", "FR", LocalDate.now(), LocalDate.now().plusYears(1), OfferStatus.VERIFIED);
-        createPricing(offer, 999L, OfferBillingPeriod.MONTHLY, null, null, null, null);
+        createPricing(offer, 999L, OfferBillingPeriod.MONTHLY, 1000L, null, null, null);
         createEvidence(offer, "https://mobile-alt9.com/sans-activation", EvidenceStatus.VERIFIED);
 
         JsonNode resp = doEvaluate(user, sub.getId(), offer.getId(), OfferSector.MOBILE_PLAN,
-                12, Map.of("minDataGb", 100, "requires5G", true), 3000L, null);
-        // 1999*12 - 999*12 - 3000 = 23988 - 11988 - 3000 = 9000
+                12, Map.of("minDataGb", 100, "requires5G", true), 3000L, 500L);
+        // Frais de résiliation 3000 + activation 1000 + autres frais 500.
         assertThat(resp.path("status").asText()).isEqualTo("SAVINGS_POSSIBLE");
-        assertThat(resp.path("estimatedNetSavingsMinor").asLong()).isEqualTo(9000L);
+        assertThat(resp.path("estimatedNetSavingsMinor").asLong()).isEqualTo(7500L);
         assertThat(resp.path("cancellationFeeMinor").asLong()).isEqualTo(3000L);
+        assertThat(resp.path("totalSwitchingCostMinor").asLong()).isEqualTo(4500L);
     }
 
     /* ---------- 10. Frais inconnus ---------- */
@@ -474,7 +491,9 @@ class SavingsIntegrationTest {
                 "{\"dataGb\":200,\"network5G\":true,\"commitment\":\"Aucun engagement\"}",
                 null, "Aucun engagement", "FR", LocalDate.now(), LocalDate.now().plusYears(1), OfferStatus.VERIFIED);
         // Pas d'activation fee, pas de frais user-known => frais inconnus
-        createPricing(offer, 999L, OfferBillingPeriod.MONTHLY, null, null, null, null);
+        OfferPricing pricing = createPricing(offer, 999L, OfferBillingPeriod.MONTHLY, null, null, null, null);
+        pricing.setActivationFeeMinor(null);
+        pricingRepository.saveAndFlush(pricing);
         createEvidence(offer, "https://mobile-alt10.com/frais-inconnus", EvidenceStatus.VERIFIED);
 
         // Envoyer explicitement null pour les frais (inconnus, pas zéro)
@@ -724,13 +743,13 @@ class SavingsIntegrationTest {
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY, null, null, null, null);
         createEvidence(offer, "https://mobile-alt20.com/expire", EvidenceStatus.VERIFIED);
 
-        // L'offre expirée devrait lever une exception 400
         mockMvc.perform(post("/v1/savings/estimate")
                         .header(HttpHeaders.AUTHORIZATION, bearer(user))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(evalBody(sub.getId(), offer.getId(), OfferSector.MOBILE_PLAN,
                                 12, Map.of("minDataGb", 100), null, null)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UNVERIFIED_OFFER"));
     }
 
     /* ---------- 21. Offre non vérifiée ---------- */
@@ -754,7 +773,56 @@ class SavingsIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(evalBody(sub.getId(), offer.getId(), OfferSector.MOBILE_PLAN,
                                 12, Map.of("minDataGb", 100), null, null)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UNVERIFIED_OFFER"));
+    }
+
+    @Test
+    @DisplayName("Une offre future, un fournisseur inactif ou une preuve expirée ne peut pas être estimée")
+    void unavailableOfferCannotBeEstimated() throws Exception {
+        User user = activeUser("unavailable-saving@eparly.test");
+        Account account = createAccount(user, "Compte");
+        Subscription sub = createSubscription(user, account, "Mobile", "Actuel", 1999L,
+                RecurringFrequency.MONTHLY, SubscriptionStatus.ACTIVE);
+
+        OfferProvider futureProvider = createProvider("FutureSaving", OfferSector.MOBILE_PLAN,
+                "https://future-saving.example");
+        CommercialOffer future = createOffer(futureProvider, "Future Plan", OfferSector.MOBILE_PLAN,
+                "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
+                LocalDate.now().plusDays(1), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+        createPricing(future, 999L, OfferBillingPeriod.MONTHLY, 0L, null, null, null);
+        createEvidence(future, "https://future-saving.example/offer", EvidenceStatus.VERIFIED);
+
+        OfferProvider inactiveProvider = createProvider("InactiveSaving", OfferSector.MOBILE_PLAN,
+                "https://inactive-saving.example");
+        inactiveProvider.setStatus(ProviderStatus.INACTIVE);
+        providerRepository.saveAndFlush(inactiveProvider);
+        CommercialOffer inactive = createOffer(inactiveProvider, "Inactive Plan", OfferSector.MOBILE_PLAN,
+                "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
+                LocalDate.now(), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+        createPricing(inactive, 999L, OfferBillingPeriod.MONTHLY, 0L, null, null, null);
+        createEvidence(inactive, "https://inactive-saving.example/offer", EvidenceStatus.VERIFIED);
+
+        OfferProvider expiredEvidenceProvider = createProvider("ExpiredEvidence", OfferSector.MOBILE_PLAN,
+                "https://expired-evidence.example");
+        CommercialOffer expiredEvidence = createOffer(expiredEvidenceProvider, "Expired Evidence Plan",
+                OfferSector.MOBILE_PLAN, "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
+                LocalDate.now(), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+        createPricing(expiredEvidence, 999L, OfferBillingPeriod.MONTHLY, 0L, null, null, null);
+        OfferEvidence evidence = createEvidence(expiredEvidence,
+                "https://expired-evidence.example/offer", EvidenceStatus.VERIFIED);
+        evidence.setExpiresAt(Instant.now().minusSeconds(1));
+        evidenceRepository.saveAndFlush(evidence);
+
+        for (CommercialOffer unavailable : List.of(future, inactive, expiredEvidence)) {
+            mockMvc.perform(post("/v1/savings/estimate")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(evalBody(sub.getId(), unavailable.getId(), OfferSector.MOBILE_PLAN,
+                                    12, Map.of("minDataGb", 100), 0L, 0L)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("UNVERIFIED_OFFER"));
+        }
     }
 
     /* ---------- 22. Utilisateur inéligible ---------- */

@@ -28,4 +28,6 @@ public interface CommercialOfferRepository extends JpaRepository<CommercialOffer
     List<CommercialOffer> findByProviderId(@Param("providerId") UUID providerId);
 
     boolean existsByCommercialNameAndProviderId(String commercialName, UUID providerId);
+
+    boolean existsByProviderId(UUID providerId);
 }

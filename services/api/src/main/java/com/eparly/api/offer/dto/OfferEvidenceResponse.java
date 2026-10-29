@@ -1,6 +1,7 @@
 package com.eparly.api.offer.dto;
 
 import com.eparly.api.offer.domain.EvidenceStatus;
+import com.eparly.api.offer.domain.OfferEvidenceScope;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -12,6 +13,7 @@ public record OfferEvidenceResponse(
         String officialUrl,
         Instant consultedAt,
         Instant verifiedAt,
+        OfferEvidenceScope evidenceScope,
         String nature,
         String verifiedSummary,
         Instant expiresAt,

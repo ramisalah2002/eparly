@@ -26,4 +26,8 @@ public interface OfferProviderRepository extends JpaRepository<OfferProvider, UU
     );
 
     boolean existsByNameAndSector(String name, OfferSector sector);
+
+    boolean existsByNameIgnoreCaseAndSector(String name, OfferSector sector);
+
+    boolean existsByNameIgnoreCaseAndSectorAndIdNot(String name, OfferSector sector, UUID id);
 }

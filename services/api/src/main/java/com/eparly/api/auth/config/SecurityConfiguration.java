@@ -2,6 +2,7 @@ package com.eparly.api.auth.config;
 
 import com.eparly.api.auth.dto.ApiErrorResponse;
 import com.eparly.api.auth.service.UserSecurityValidator;
+import com.eparly.api.offer.admin.security.CatalogAdminPermissionRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,10 +16,15 @@ import tools.jackson.databind.ObjectMapper;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.UUID;
 
 @Configuration
 public class SecurityConfiguration {
@@ -29,6 +35,7 @@ public class SecurityConfiguration {
             ObjectMapper objectMapper,
             Environment environment,
             UserSecurityValidator userSecurityValidator,
+            CatalogAdminPermissionRepository adminPermissionRepository,
             @Value("${eparly.openapi.public:false}") boolean openApiPublic
     ) throws Exception {
         JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
@@ -55,12 +62,23 @@ public class SecurityConfiguration {
                         authorize.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                                 .permitAll();
                     }
+                    authorize.requestMatchers("/v1/admin/catalog/**").hasAuthority("CATALOG_ADMIN");
                     authorize.anyRequest().authenticated();
                 })
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(token -> {
                             userSecurityValidator.validate(token);
-                            return jwtAuthenticationConverter.convert(token);
+                            AbstractAuthenticationToken authentication = jwtAuthenticationConverter.convert(token);
+                            if (authentication == null) {
+                                return null;
+                            }
+                            UUID userId = UUID.fromString(token.getSubject());
+                            if (!adminPermissionRepository.isActiveAdministrator(userId)) {
+                                return authentication;
+                            }
+                            var authorities = new HashSet<>(authentication.getAuthorities());
+                            authorities.add(new SimpleGrantedAuthority("CATALOG_ADMIN"));
+                            return new JwtAuthenticationToken(token, authorities);
                         }))
                         .authenticationEntryPoint((request, response, exception) ->
                                 writeSecurityError(objectMapper, response, 401, "Unauthorized",

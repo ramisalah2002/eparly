@@ -10,6 +10,7 @@ import com.eparly.api.offer.dto.OfferMetadataResponse;
 import com.eparly.api.offer.dto.OfferProviderResponse;
 import com.eparly.api.offer.repository.*;
 import com.eparly.api.offer.service.OfferCatalogService;
+import com.eparly.api.offer.service.OfferAvailabilityService;
 import com.eparly.api.user.domain.User;
 import com.eparly.api.user.domain.UserStatus;
 import com.eparly.api.user.repository.UserRepository;
@@ -65,6 +66,7 @@ class OfferCatalogIntegrationTest {
     @Autowired private JwtEncoder jwtEncoder;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private OfferCatalogService service;
+    @Autowired private OfferAvailabilityService availabilityService;
     @Autowired private OfferProviderRepository providerRepository;
     @Autowired private CommercialOfferRepository offerRepository;
     @Autowired private OfferPricingRepository pricingRepository;
@@ -150,6 +152,9 @@ class OfferCatalogIntegrationTest {
         e.setVerifiedSummary("Prix verifie sur le site officiel");
         e.setVerificationStatus(EvidenceStatus.VERIFIED);
         e.setProvenance("Verification manuelle");
+        e.setVerifiedPricingVersion(pricingRepository.findByOfferId(offer.getId())
+                .map(OfferPricing::getVersion).orElse(null));
+        e.setVerifiedProviderVersion(offer.getProvider().getVersion());
         return evidenceRepository.saveAndFlush(e);
     }
 
@@ -244,15 +249,16 @@ class OfferCatalogIntegrationTest {
         OfferProvider provider = createProvider("ExampleStream", OfferSector.STREAMING, "https://example-stream.com");
         CommercialOffer offer = createDraftOffer(provider, "Promo", OfferSector.STREAMING);
         OfferPricing pricing = createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
+        pricing.setPromotionPriceType(PromotionPriceType.PERCENTAGE);
         pricing.setPromotionPercent(20);
         pricing.setPromotionDurationMonths(3);
-        pricing.setPriceAfterPromotionMinor(799L);
+        pricing.setPriceAfterPromotionMinor(null);
         pricing.setDiscountConditions("Offre de bienvenue 3 mois");
         pricingRepository.saveAndFlush(pricing);
 
         assertThat(pricing.getPromotionPercent()).isEqualTo(20);
         assertThat(pricing.getPromotionDurationMonths()).isEqualTo(3);
-        assertThat(pricing.getPriceAfterPromotionMinor()).isEqualTo(799L);
+        assertThat(pricing.getPriceAfterPromotionMinor()).isNull();
         assertThat(pricing.getDiscountConditions()).isEqualTo("Offre de bienvenue 3 mois");
     }
 
@@ -262,12 +268,13 @@ class OfferCatalogIntegrationTest {
         OfferProvider provider = createProvider("ExampleStream", OfferSector.STREAMING, "https://example-stream.com");
         CommercialOffer offer = createDraftOffer(provider, "Apres Promo", OfferSector.STREAMING);
         OfferPricing pricing = createPricing(offer, 1299L, OfferBillingPeriod.MONTHLY);
-        pricing.setPromotionPercent(25);
+        pricing.setPromotionPriceType(PromotionPriceType.FIXED_PRICE);
         pricing.setPriceAfterPromotionMinor(974L);
         pricingRepository.saveAndFlush(pricing);
 
         assertThat(pricing.getAmountMinor()).isEqualTo(1299L);
         assertThat(pricing.getPriceAfterPromotionMinor()).isEqualTo(974L);
+        assertThat(pricing.getPromotionPercent()).isNull();
         assertThat(pricing.getAmountMinor()).isNotEqualTo(pricing.getPriceAfterPromotionMinor());
     }
 
@@ -328,7 +335,8 @@ class OfferCatalogIntegrationTest {
         assertThat(published.publicationStatus()).isEqualTo(OfferStatus.VERIFIED);
 
         // Simuler une verification trop ancienne
-        OfferEvidence evidence = evidenceRepository.findAllByOfferIdOrderByVerifiedAtDesc(offer.getId()).get(0);
+        OfferEvidence evidence = evidenceRepository.findAllByOfferIdOrderByConsultedAtDescCreatedAtDescIdDesc(offer.getId()).get(0);
+        evidence.setConsultedAt(Instant.now().minus(40, ChronoUnit.DAYS));
         evidence.setVerifiedAt(Instant.now().minus(40, ChronoUnit.DAYS));
         evidenceRepository.saveAndFlush(evidence);
 
@@ -354,6 +362,7 @@ class OfferCatalogIntegrationTest {
         CommercialOffer offer = createDraftOffer(provider, "Revision", OfferSector.STREAMING);
         OfferPricing pricing = createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         pricingRepository.saveAndFlush(pricing);
+        Long versionBefore = pricing.getVersion();
 
         service.revisePrice(offer.getId(), 1099L, "Augmentation tarifaire 2026");
         List<OfferPriceHistory> history = priceHistoryRepository.findAllByOfferIdOrderByChangedAtDesc(offer.getId());
@@ -361,8 +370,118 @@ class OfferCatalogIntegrationTest {
         assertThat(history.get(0).getOldAmountMinor()).isEqualTo(999L);
         assertThat(history.get(0).getNewAmountMinor()).isEqualTo(1099L);
         assertThat(history.get(0).getReason()).isEqualTo("Augmentation tarifaire 2026");
+        assertThat(((Number) history.get(0).getOldPricingSnapshot().get("amountMinor")).longValue())
+                .isEqualTo(999L);
+        assertThat(history.get(0).getOldPricingSnapshot().get("billingPeriod"))
+                .isEqualTo(OfferBillingPeriod.MONTHLY);
+        assertThat(((Number) history.get(0).getNewPricingSnapshot().get("amountMinor")).longValue())
+                .isEqualTo(1099L);
+        assertThat(history.get(0).getNewPricingSnapshot()).containsKey("activationFeeMinor");
+        assertThat(history.get(0).getNewPricingSnapshot().get("activationFeeMinor")).isNull();
         OfferPricing updated = pricingRepository.findByOfferId(offer.getId()).orElseThrow();
         assertThat(updated.getAmountMinor()).isEqualTo(1099L);
+        assertThat(updated.getVersion()).isGreaterThan(versionBefore);
+    }
+
+    @Test
+    @DisplayName("V18 conserve les promotions legacy ambigues sans leur attribuer de méthode")
+    void legacyPromotionRemainsAmbiguous() {
+        OfferProvider provider = createProvider("ExampleStream", OfferSector.STREAMING, "https://example-stream.com");
+        CommercialOffer offer = createDraftOffer(provider, "Legacy promo", OfferSector.STREAMING);
+        OfferPricing pricing = createPricing(offer, 1999L, OfferBillingPeriod.MONTHLY);
+        pricing.setPromotionPercent(50);
+        pricing.setPromotionDurationMonths(3);
+        pricing.setPriceAfterPromotionMinor(1999L);
+        pricingRepository.saveAndFlush(pricing);
+
+        OfferPricing loaded = pricingRepository.findByOfferId(offer.getId()).orElseThrow();
+        assertThat(loaded.getPromotionPriceType()).isNull();
+        assertThat(loaded.getPromotionPercent()).isEqualTo(50);
+        assertThat(loaded.getPriceAfterPromotionMinor()).isEqualTo(1999L);
+    }
+
+    @Test
+    @DisplayName("Une preuve de promotion trop ancienne est rejetée indépendamment de la preuve d'offre")
+    void stalePromotionEvidenceIsRejected() {
+        OfferProvider provider = createProvider("ExampleStream", OfferSector.STREAMING, "https://example-stream.com");
+        CommercialOffer offer = createDraftOffer(provider, "Promotion stale", OfferSector.STREAMING);
+        OfferEvidence evidence = createVerifiedEvidence(offer, "https://example-stream.com/promo");
+        evidence.setEvidenceScope(OfferEvidenceScope.PROMOTION);
+        Instant staleAt = Instant.now().minus(properties.getPromotionFreshnessThreshold()).minusSeconds(10);
+        evidence.setConsultedAt(staleAt);
+        evidence.setVerifiedAt(staleAt);
+        evidenceRepository.saveAndFlush(evidence);
+
+        assertThat(availabilityService.currentPromotionEvidence(offer)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Le détail public masque le tarif promotionnel sans preuve dédiée fraîche")
+    void promotionIsOnlyExposedWhenVerified() {
+        OfferProvider provider = createProvider("ExampleStream", OfferSector.STREAMING, "https://example-stream.com");
+        CommercialOffer offer = createDraftOffer(provider, "Promotion publique", OfferSector.STREAMING);
+        OfferPricing pricing = createPricing(offer, 1999L, OfferBillingPeriod.MONTHLY);
+        pricing.setPromotionPriceType(PromotionPriceType.PERCENTAGE);
+        pricing.setPromotionPercent(20);
+        pricing.setPromotionDurationMonths(3);
+        pricingRepository.saveAndFlush(pricing);
+        createVerifiedEvidence(offer, "https://example-stream.com/offer");
+        service.validateAndPublish(offer.getId());
+
+        assertThat(service.getPublicOffer(offer.getId()).pricing().promotionVerified()).isFalse();
+        assertThat(service.getPublicOffer(offer.getId()).pricing().promotionPercent()).isNull();
+
+        OfferEvidence promotionEvidence = createVerifiedEvidence(offer, "https://example-stream.com/promotion");
+        promotionEvidence.setEvidenceScope(OfferEvidenceScope.PROMOTION);
+        evidenceRepository.saveAndFlush(promotionEvidence);
+        assertThat(service.getPublicOffer(offer.getId()).pricing().promotionVerified()).isTrue();
+        assertThat(service.getPublicOffer(offer.getId()).pricing().promotionPercent()).isEqualTo(20);
+    }
+
+    @Test
+    @DisplayName("Une preuve de promotion vérifiée depuis moins de sept jours reste fraîche")
+    void freshPromotionEvidenceIsAccepted() {
+        OfferProvider provider = createProvider("ExampleStream", OfferSector.STREAMING, "https://example-stream.com");
+        CommercialOffer offer = createDraftOffer(provider, "Promotion fraîche", OfferSector.STREAMING);
+        createPricing(offer, 1999L, OfferBillingPeriod.MONTHLY);
+        OfferEvidence evidence = createVerifiedEvidence(offer, "https://example-stream.com/promo");
+        evidence.setEvidenceScope(OfferEvidenceScope.PROMOTION);
+        Instant freshAt = Instant.now().minus(properties.getPromotionFreshnessThreshold()).plusSeconds(10);
+        evidence.setConsultedAt(freshAt);
+        evidence.setVerifiedAt(freshAt);
+        evidenceRepository.saveAndFlush(evidence);
+
+        assertThat(availabilityService.currentPromotionEvidence(offer)).isPresent();
+    }
+
+    @Test
+    @DisplayName("Les preuves de prix ou de promotion seules ne valident pas toute l'offre")
+    void evidenceScopeIsEnforcedForOfferPublication() {
+        OfferProvider provider = createProvider("ExampleStream", OfferSector.STREAMING, "https://example-stream.com");
+        CommercialOffer offer = createDraftOffer(provider, "Scopes preuves", OfferSector.STREAMING);
+        offer.setPublicationStatus(OfferStatus.VERIFIED);
+        offerRepository.saveAndFlush(offer);
+        createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
+        OfferEvidence evidence = createVerifiedEvidence(offer, "https://example-stream.com/evidence");
+        evidence.setEvidenceScope(OfferEvidenceScope.PROMOTION);
+        evidenceRepository.saveAndFlush(evidence);
+
+        assertThat(availabilityService.evaluate(offer, "FR").available()).isFalse();
+        assertThat(availabilityService.evaluate(offer, "FR").failure())
+                .isEqualTo(OfferAvailabilityService.AvailabilityFailure.MISSING_EVIDENCE);
+
+        evidence.setEvidenceScope(OfferEvidenceScope.PRICING);
+        evidenceRepository.saveAndFlush(evidence);
+        assertThat(availabilityService.evaluate(offer, "FR").failure())
+                .isEqualTo(OfferAvailabilityService.AvailabilityFailure.MISSING_EVIDENCE);
+
+        evidence.setEvidenceScope(OfferEvidenceScope.OFFER);
+        evidenceRepository.saveAndFlush(evidence);
+        assertThat(availabilityService.evaluate(offer, "FR").available()).isTrue();
+        assertThat(offerRepository.findAll(
+                availabilityService.currentlyAvailable(OfferSector.STREAMING, null, "FR")))
+                .extracting(CommercialOffer::getId)
+                .contains(offer.getId());
     }
 
     @Test
@@ -515,7 +634,8 @@ class OfferCatalogIntegrationTest {
         service.validateAndPublish(offer.getId());
 
         // Rendre stale
-        OfferEvidence evidence = evidenceRepository.findAllByOfferIdOrderByVerifiedAtDesc(offer.getId()).get(0);
+        OfferEvidence evidence = evidenceRepository.findAllByOfferIdOrderByConsultedAtDescCreatedAtDescIdDesc(offer.getId()).get(0);
+        evidence.setConsultedAt(Instant.now().minus(40, ChronoUnit.DAYS));
         evidence.setVerifiedAt(Instant.now().minus(40, ChronoUnit.DAYS));
         evidenceRepository.saveAndFlush(evidence);
         service.markStale();
@@ -524,6 +644,140 @@ class OfferCatalogIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(user.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("Les filtres publics ne peuvent pas contourner les statuts disponibles et conservent les totaux")
+    void publicStatusFiltersDoNotBypassAvailability() throws Exception {
+        User user = activeUser();
+        OfferProvider provider = createProvider("Filtered", OfferSector.STREAMING, "https://filtered.example");
+        CommercialOffer offer = createDraftOffer(provider, "Current", OfferSector.STREAMING);
+        createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
+        createVerifiedEvidence(offer, "https://filtered.example/current");
+        service.validateAndPublish(offer.getId());
+
+        OfferProvider staleProvider = createProvider("Filtered Stale", OfferSector.STREAMING,
+                "https://filtered-stale.example");
+        CommercialOffer staleOffer = createDraftOffer(staleProvider, "Stale", OfferSector.STREAMING);
+        staleOffer.setPublicationStatus(OfferStatus.STALE);
+        offerRepository.saveAndFlush(staleOffer);
+        createPricing(staleOffer, 999L, OfferBillingPeriod.MONTHLY);
+        createVerifiedEvidence(staleOffer, "https://filtered-stale.example/old");
+
+        mockMvc.perform(get("/v1/offers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user.getId()))
+                        .param("status", "STALE")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0));
+
+        mockMvc.perform(get("/v1/offers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user.getId()))
+                        .param("status", "VERIFIED")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("Une preuve vérifiée récente prévaut sur une ancienne preuve périmée")
+    void latestVerifiedEvidenceCanReplaceOlderEvidence() throws Exception {
+        User user = activeUser();
+        OfferProvider provider = createProvider("EvidenceOrder", OfferSector.STREAMING, "https://evidence-order.example");
+        CommercialOffer offer = createDraftOffer(provider, "Refreshed", OfferSector.STREAMING);
+        createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
+
+        OfferEvidence oldEvidence = createVerifiedEvidence(offer, "https://evidence-order.example/old");
+        oldEvidence.setConsultedAt(Instant.now().minus(60, ChronoUnit.DAYS));
+        oldEvidence.setVerifiedAt(Instant.now().minus(60, ChronoUnit.DAYS));
+        evidenceRepository.saveAndFlush(oldEvidence);
+        createVerifiedEvidence(offer, "https://evidence-order.example/current");
+        service.validateAndPublish(offer.getId());
+
+        mockMvc.perform(get("/v1/offers/{id}", offer.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.evidence.length()").value(1))
+                .andExpect(jsonPath("$.evidence[0].officialUrl")
+                        .value("https://evidence-order.example/current"));
+    }
+
+    @Test
+    @DisplayName("Une information invalidante plus récente invalide l'ancienne preuve vérifiée")
+    void newerInvalidEvidenceInvalidatesOldVerifiedEvidence() throws Exception {
+        User user = activeUser();
+        OfferProvider provider = createProvider("Invalidation", OfferSector.STREAMING, "https://invalidation.example");
+        CommercialOffer offer = createDraftOffer(provider, "Invalidated", OfferSector.STREAMING);
+        createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
+        createVerifiedEvidence(offer, "https://invalidation.example/current");
+        service.validateAndPublish(offer.getId());
+
+        OfferEvidence invalidation = new OfferEvidence();
+        invalidation.setOffer(offer);
+        invalidation.setOfficialUrl("https://invalidation.example/withdrawn");
+        invalidation.setConsultedAt(Instant.now().plusSeconds(2));
+        invalidation.setNature("Retrait du tarif");
+        invalidation.setVerificationStatus(EvidenceStatus.INVALID);
+        invalidation.setProvenance("Revue manuelle");
+        evidenceRepository.saveAndFlush(invalidation);
+
+        mockMvc.perform(get("/v1/offers/{id}", offer.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user.getId())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Un fournisseur inactif, une offre future ou une validation inconnue ne sont pas publiés")
+    void inactiveFutureAndUnknownVerificationAreExcluded() throws Exception {
+        User user = activeUser();
+
+        OfferProvider inactiveProvider = createProvider("Inactive", OfferSector.STREAMING, "https://inactive.example");
+        inactiveProvider.setStatus(ProviderStatus.INACTIVE);
+        providerRepository.saveAndFlush(inactiveProvider);
+        CommercialOffer inactiveOffer = createDraftOffer(inactiveProvider, "Inactive Offer", OfferSector.STREAMING);
+        inactiveOffer.setPublicationStatus(OfferStatus.VERIFIED);
+        offerRepository.saveAndFlush(inactiveOffer);
+        createPricing(inactiveOffer, 999L, OfferBillingPeriod.MONTHLY);
+        createVerifiedEvidence(inactiveOffer, "https://inactive.example/offer");
+
+        OfferProvider futureProvider = createProvider("Future", OfferSector.STREAMING, "https://future.example");
+        CommercialOffer futureOffer = createDraftOffer(futureProvider, "Future Offer", OfferSector.STREAMING);
+        futureOffer.setPublicationStatus(OfferStatus.VERIFIED);
+        futureOffer.setValidFrom(LocalDate.now().plusDays(1));
+        offerRepository.saveAndFlush(futureOffer);
+        createPricing(futureOffer, 999L, OfferBillingPeriod.MONTHLY);
+        createVerifiedEvidence(futureOffer, "https://future.example/offer");
+
+        OfferProvider unknownProvider = createProvider("Unknown Date", OfferSector.STREAMING, "https://unknown-date.example");
+        CommercialOffer unknownOffer = createDraftOffer(unknownProvider, "Unknown Verification", OfferSector.STREAMING);
+        unknownOffer.setPublicationStatus(OfferStatus.VERIFIED);
+        offerRepository.saveAndFlush(unknownOffer);
+        createPricing(unknownOffer, 999L, OfferBillingPeriod.MONTHLY);
+        OfferEvidence unknownEvidence = new OfferEvidence();
+        unknownEvidence.setOffer(unknownOffer);
+        unknownEvidence.setOfficialUrl("https://unknown-date.example/offer");
+        unknownEvidence.setConsultedAt(Instant.now());
+        unknownEvidence.setNature("Prix");
+        unknownEvidence.setVerificationStatus(EvidenceStatus.VERIFIED);
+        unknownEvidence.setProvenance("Import");
+        evidenceRepository.saveAndFlush(unknownEvidence);
+
+        OfferProvider noEvidenceProvider = createProvider("No Evidence", OfferSector.STREAMING,
+                "https://no-evidence.example");
+        CommercialOffer noEvidenceOffer = createDraftOffer(noEvidenceProvider, "No Evidence Offer",
+                OfferSector.STREAMING);
+        noEvidenceOffer.setPublicationStatus(OfferStatus.VERIFIED);
+        offerRepository.saveAndFlush(noEvidenceOffer);
+        createPricing(noEvidenceOffer, 999L, OfferBillingPeriod.MONTHLY);
+
+        mockMvc.perform(get("/v1/offers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0))
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     @Test

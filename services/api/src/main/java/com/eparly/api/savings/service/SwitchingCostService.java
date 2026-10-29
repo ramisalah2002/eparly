@@ -38,34 +38,51 @@ public class SwitchingCostService {
 
     /**
      * Calcule les frais totaux avec détection des frais inconnus.
-     * Retourne toujours le total des frais connus (jamais null) et la liste des frais manquants.
+     * Le total est null en cas de dépassement numérique; le calcul reste alors incomplet.
      * L'appelant doit vérifier missingFees pour déterminer si l'estimation est fiable.
      */
     public SwitchingCostResult calculateWithMissingInfo(Long cancellationFee, Long activationFee, Long otherFees) {
         Long total = 0L;
         java.util.List<String> missing = new java.util.ArrayList<>();
+        boolean overflow = false;
 
         if (cancellationFee != null) {
             if (cancellationFee < 0) throw new IllegalArgumentException("cancellationFee must be non-negative");
-            total = Math.addExact(total, cancellationFee);
+            try {
+                total = Math.addExact(total, cancellationFee);
+            } catch (ArithmeticException e) {
+                overflow = true;
+            }
         } else {
             missing.add("Frais de résiliation");
         }
 
         if (activationFee != null) {
             if (activationFee < 0) throw new IllegalArgumentException("activationFee must be non-negative");
-            total = Math.addExact(total, activationFee);
+            try {
+                total = Math.addExact(total, activationFee);
+            } catch (ArithmeticException e) {
+                overflow = true;
+            }
         } else {
             missing.add("Frais d'activation");
         }
 
         if (otherFees != null) {
             if (otherFees < 0) throw new IllegalArgumentException("otherFees must be non-negative");
-            total = Math.addExact(total, otherFees);
+            try {
+                total = Math.addExact(total, otherFees);
+            } catch (ArithmeticException e) {
+                overflow = true;
+            }
         } else {
             missing.add("Autres frais");
         }
 
+        if (overflow) {
+            total = null;
+            missing.add("Total des frais de changement (dépassement numérique)");
+        }
         return new SwitchingCostResult(total, missing);
     }
 

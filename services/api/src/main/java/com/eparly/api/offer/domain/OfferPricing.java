@@ -13,12 +13,13 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -56,11 +57,22 @@ public class OfferPricing {
     @Column(name = "promotion_percent")
     private Integer promotionPercent;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "promotion_price_type", length = 20)
+    private PromotionPriceType promotionPriceType;
+
     @Column(name = "promotion_duration_months")
     private Integer promotionDurationMonths;
 
+    // Historical field name; with FIXED_PRICE this is the rate during the promotion.
     @Column(name = "price_after_promotion_minor")
     private Long priceAfterPromotionMinor;
+
+    @Column(name = "promotion_valid_from")
+    private LocalDate promotionValidFrom;
+
+    @Column(name = "promotion_valid_until")
+    private LocalDate promotionValidUntil;
 
     @Size(max = 500)
     @Column(name = "discount_conditions", length = 500)
@@ -77,6 +89,10 @@ public class OfferPricing {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     public OfferPricing() {
     }
@@ -117,11 +133,20 @@ public class OfferPricing {
     public Integer getPromotionPercent() { return promotionPercent; }
     public void setPromotionPercent(Integer promotionPercent) { this.promotionPercent = promotionPercent; }
 
+    public PromotionPriceType getPromotionPriceType() { return promotionPriceType; }
+    public void setPromotionPriceType(PromotionPriceType promotionPriceType) { this.promotionPriceType = promotionPriceType; }
+
     public Integer getPromotionDurationMonths() { return promotionDurationMonths; }
     public void setPromotionDurationMonths(Integer promotionDurationMonths) { this.promotionDurationMonths = promotionDurationMonths; }
 
     public Long getPriceAfterPromotionMinor() { return priceAfterPromotionMinor; }
     public void setPriceAfterPromotionMinor(Long priceAfterPromotionMinor) { this.priceAfterPromotionMinor = priceAfterPromotionMinor; }
+
+    public LocalDate getPromotionValidFrom() { return promotionValidFrom; }
+    public void setPromotionValidFrom(LocalDate promotionValidFrom) { this.promotionValidFrom = promotionValidFrom; }
+
+    public LocalDate getPromotionValidUntil() { return promotionValidUntil; }
+    public void setPromotionValidUntil(LocalDate promotionValidUntil) { this.promotionValidUntil = promotionValidUntil; }
 
     public String getDiscountConditions() { return discountConditions; }
     public void setDiscountConditions(String discountConditions) { this.discountConditions = discountConditions; }
@@ -137,6 +162,9 @@ public class OfferPricing {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
     @Override
     public boolean equals(Object o) {

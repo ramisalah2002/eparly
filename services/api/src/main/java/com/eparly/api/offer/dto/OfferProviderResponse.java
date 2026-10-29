@@ -16,6 +16,7 @@ public record OfferProviderResponse(
         String country,
         ProviderStatus status,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Long version
 ) {
 }

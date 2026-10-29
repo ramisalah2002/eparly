@@ -29,7 +29,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/offers")
-@Tag(name = "Offre catalogue", description = "Catalogue d'offres commerciales verifiees (lecture seule)")
+@Tag(name = "Offre catalogue", description = "Catalogue d'offres commerciales actuellement disponibles (lecture seule)")
 @SecurityRequirement(name = "bearerAuth")
 public class OfferCatalogController {
 
@@ -41,8 +41,8 @@ public class OfferCatalogController {
 
     @GetMapping
     @Operation(summary = "Lister les offres publiques",
-            description = "Retourne les offres verifiees consultables, filtrees et paginees. "
-                    + "Les offres DRAFT, STALE, EXPIREes et ARCHIVEes sont exclues par defaut.")
+            description = "Retourne uniquement les offres actuellement disponibles, filtrées et paginées. "
+                    + "Les filtres ne permettent pas d'exposer une offre non vérifiée, expirée ou périmée.")
     @ApiResponse(responseCode = "200", description = "Liste paginee d'offres", content = @Content(
             schema = @Schema(implementation = OfferListResponse.class)))
     @ApiResponse(responseCode = "401", description = "JWT absent ou invalide")
@@ -61,7 +61,7 @@ public class OfferCatalogController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Detail d'une offre publique",
-            description = "Retourne le detail complet d'une offre verifiee : fournisseur, tarification, preuves, conditions.")
+            description = "Retourne le détail d'une offre actuellement disponible : fournisseur, tarification, preuve actuelle et conditions.")
     @ApiResponse(responseCode = "200", description = "Offre trouvee", content = @Content(
             schema = @Schema(implementation = CommercialOfferResponse.class)))
     @ApiResponse(responseCode = "401", description = "JWT absent ou invalide")
@@ -110,7 +110,7 @@ public class OfferCatalogController {
     private OfferProviderResponse toProviderResponse(com.eparly.api.offer.domain.OfferProvider p) {
         return new OfferProviderResponse(
                 p.getId(), p.getName(), p.getSector(), p.getOfficialWebsite(),
-                p.getCountry(), p.getStatus(), p.getCreatedAt(), p.getUpdatedAt()
+                p.getCountry(), p.getStatus(), p.getCreatedAt(), p.getUpdatedAt(), p.getVersion()
         );
     }
 }
