@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 
-@Converter(autoApply = true)
+@Converter(autoApply = false)
 public class SavingsEstimateSnapshotConverter implements AttributeConverter<SavingsEstimateSnapshot, String> {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

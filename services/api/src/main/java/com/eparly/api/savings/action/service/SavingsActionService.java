@@ -30,6 +30,7 @@ import com.eparly.api.savings.service.SavingsEstimationService;
 import com.eparly.api.subscription.domain.Subscription;
 import com.eparly.api.subscription.repository.SubscriptionRepository;
 import com.eparly.api.user.domain.User;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -39,6 +40,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -59,6 +61,7 @@ public class SavingsActionService {
     private final List<ComparisonStrategy> comparisonStrategies;
     private final SavingsActionRepository subscriptionActionRepository;
     private final SavingsActionHistoryRepository subscriptionActionHistoryRepository;
+    private final Clock clock;
 
     public SavingsActionService(
             SubscriptionRepository subscriptionRepository,
@@ -69,7 +72,8 @@ public class SavingsActionService {
             ComparisonService comparisonService,
             List<ComparisonStrategy> comparisonStrategies,
             SavingsActionRepository subscriptionActionRepository,
-            SavingsActionHistoryRepository subscriptionActionHistoryRepository) {
+            SavingsActionHistoryRepository subscriptionActionHistoryRepository,
+            @Autowired(required = false) Clock clock) {
         this.subscriptionRepository = subscriptionRepository;
         this.offerRepository = offerRepository;
         this.pricingRepository = pricingRepository;
@@ -79,6 +83,7 @@ public class SavingsActionService {
         this.comparisonStrategies = comparisonStrategies;
         this.subscriptionActionRepository = subscriptionActionRepository;
         this.subscriptionActionHistoryRepository = subscriptionActionHistoryRepository;
+        this.clock = clock != null ? clock : Clock.systemUTC();
     }
 
     @Transactional
@@ -90,10 +95,10 @@ public class SavingsActionService {
         UUID userId = JwtUserId.from(jwt);
 
         Subscription subscription = subscriptionRepository.findByIdAndUserId(request.subscriptionId(), userId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Action introuvable"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Abonnement introuvable"));
 
-        List<SavingsAction> existingActive = subscriptionActionRepository.findActiveActionsBySubscriptionAndUserId(
-                userId, request.subscriptionId());
+        List<SavingsAction> existingActive = subscriptionActionRepository.findActiveActionsBySubscriptionAndOffer(
+                request.subscriptionId(), request.offerId());
         if (!existingActive.isEmpty()) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Une action existe déjà pour cet abonnement et cette offre alternative");
@@ -140,6 +145,7 @@ public class SavingsActionService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Offre introuvable"));
 
         SavingsAction action = new SavingsAction();
+        action.setUser(subscription.getUser());
         action.setSubscription(subscription);
         action.setAlternativeOffer(offer);
         action.setStatus(ActionStatus.PLANNED);
@@ -147,10 +153,16 @@ public class SavingsActionService {
         action.setHorizonMonths(horizonMonths);
         action.setNotes(request.notes());
 
-        SavingsEstimateSnapshot snapshot = buildSnapshot(estimate, horizonMonths);
+        String currency = subscription.getCurrency() != null ? subscription.getCurrency() : "EUR";
+        SavingsEstimateSnapshot snapshot = buildSnapshot(estimate, horizonMonths, currency);
         action.setEstimateSnapshot(snapshot);
 
-        action = subscriptionActionRepository.save(action);
+        try {
+            action = subscriptionActionRepository.saveAndFlush(action);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Une action existe déjà pour cet abonnement et cette offre alternative");
+        }
 
         recordHistory(action, null, ActionStatus.PLANNED, "CREATED", "Action créée");
 
@@ -211,7 +223,15 @@ public class SavingsActionService {
 
         validateTransition(previous, next);
 
-        Instant now = Instant.now();
+        if (previous == next) {
+            if (request.notes() != null && !request.notes().isBlank()) {
+                action.setNotes(request.notes());
+                action = subscriptionActionRepository.save(action);
+            }
+            return toResponse(action);
+        }
+
+        Instant now = clock.instant();
         if (next == ActionStatus.COMMITTED) {
             action.setCommittedAt(now);
         } else if (next == ActionStatus.DECLARED) {
@@ -241,14 +261,36 @@ public class SavingsActionService {
         long canceled = subscriptionActionRepository.countByUserIdAndStatus(userId, ActionStatus.CANCELED);
 
         List<SavingsAction> all = subscriptionActionRepository.findAllByUserIdFiltered(userId, null, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+
+        String currency = "EUR";
+        Integer horizonMonths = 12;
+        for (SavingsAction a : all) {
+            if (a.getEstimateSnapshot() != null && a.getEstimateSnapshot().currency() != null) {
+                currency = a.getEstimateSnapshot().currency();
+                if (a.getEstimateSnapshot().horizonMonths() != null) {
+                    horizonMonths = a.getEstimateSnapshot().horizonMonths();
+                }
+                break;
+            }
+        }
+
+        final String finalCurrency = currency;
+        final Integer finalHorizon = horizonMonths;
+
         Long potentialSavings = all.stream()
-                .filter(a -> a.getEstimateSnapshot() != null && a.getEstimateSnapshot().potentialNetSavingsMinor() != null)
+                .filter(a -> a.getStatus() != ActionStatus.CANCELED
+                        && a.getEstimateSnapshot() != null
+                        && finalCurrency.equalsIgnoreCase(a.getEstimateSnapshot().currency())
+                        && (a.getEstimateSnapshot().horizonMonths() == null || finalHorizon.equals(a.getEstimateSnapshot().horizonMonths()))
+                        && a.getEstimateSnapshot().potentialNetSavingsMinor() != null)
                 .mapToLong(a -> a.getEstimateSnapshot().potentialNetSavingsMinor())
                 .sum();
 
         Long committedSavings = all.stream()
                 .filter(a -> a.getStatus() == ActionStatus.COMMITTED
                         && a.getEstimateSnapshot() != null
+                        && finalCurrency.equalsIgnoreCase(a.getEstimateSnapshot().currency())
+                        && (a.getEstimateSnapshot().horizonMonths() == null || finalHorizon.equals(a.getEstimateSnapshot().horizonMonths()))
                         && a.getEstimateSnapshot().potentialNetSavingsMinor() != null)
                 .mapToLong(a -> a.getEstimateSnapshot().potentialNetSavingsMinor())
                 .sum();
@@ -256,18 +298,11 @@ public class SavingsActionService {
         Long declaredSavings = all.stream()
                 .filter(a -> a.getStatus() == ActionStatus.DECLARED
                         && a.getEstimateSnapshot() != null
+                        && finalCurrency.equalsIgnoreCase(a.getEstimateSnapshot().currency())
+                        && (a.getEstimateSnapshot().horizonMonths() == null || finalHorizon.equals(a.getEstimateSnapshot().horizonMonths()))
                         && a.getEstimateSnapshot().potentialNetSavingsMinor() != null)
                 .mapToLong(a -> a.getEstimateSnapshot().potentialNetSavingsMinor())
                 .sum();
-
-        String currency = "EUR";
-        Integer horizonMonths = 12;
-        if (!all.isEmpty() && all.get(0).getEstimateSnapshot() != null && all.get(0).getEstimateSnapshot().currency() != null) {
-            currency = all.get(0).getEstimateSnapshot().currency() != null
-                    ? all.get(0).getEstimateSnapshot().currency() : "EUR";
-            horizonMonths = all.get(0).getEstimateSnapshot().horizonMonths() != null
-                    ? all.get(0).getEstimateSnapshot().horizonMonths() : 12;
-        }
 
         return new SavingsPlanSummaryResponse(
                 (int) total,
@@ -322,16 +357,17 @@ public class SavingsActionService {
         h.setAction(action);
         h.setPreviousStatus(previous);
         h.setNewStatus(next);
+        h.setCreatedAt(clock.instant());
         h.setEventType(eventType);
         h.setDetails(details);
         subscriptionActionHistoryRepository.save(h);
     }
 
-    private SavingsEstimateSnapshot buildSnapshot(SavingsEstimateResponse estimate, Integer horizonMonths) {
+    private SavingsEstimateSnapshot buildSnapshot(SavingsEstimateResponse estimate, Integer horizonMonths, String currency) {
         return new SavingsEstimateSnapshot(
                 "1.0.0",
                 horizonMonths,
-                "EUR",
+                currency != null ? currency : "EUR",
                 estimate.currentTotalCostMinor(),
                 estimate.currentCostSource(),
                 estimate.alternativeTotalCostMinor(),
@@ -346,11 +382,10 @@ public class SavingsActionService {
         );
     }
 
-
     private SavingsActionResponse toResponse(SavingsAction action) {
         boolean estimateMayBeStale = action.getEstimateSnapshot() != null
                 && action.getEstimateSnapshot().offerVerifiedAt() != null
-                && action.getEstimateSnapshot().offerVerifiedAt().isBefore(Instant.now().minusSeconds(86400 * 30));
+                && action.getEstimateSnapshot().offerVerifiedAt().isBefore(clock.instant().minusSeconds(86400 * 30));
 
         return new SavingsActionResponse(
                 action.getId(),

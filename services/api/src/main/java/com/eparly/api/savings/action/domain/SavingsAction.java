@@ -18,8 +18,11 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -63,6 +66,9 @@ public class SavingsAction {
     @Column(name = "declared_at")
     private Instant declaredAt;
 
+    @Column(name = "effective_change_date")
+    private LocalDate effectiveChangeDate;
+
     @Column(name = "canceled_at")
     private Instant canceledAt;
 
@@ -72,7 +78,7 @@ public class SavingsAction {
     @Column(name = "horizon_months", nullable = false)
     private Integer horizonMonths;
 
-    @Convert(converter = SavingsEstimateSnapshotConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "estimate_snapshot", columnDefinition = "jsonb")
     private SavingsEstimateSnapshot estimateSnapshot;
 
@@ -120,6 +126,9 @@ public class SavingsAction {
 
     public Instant getDeclaredAt() { return declaredAt; }
     public void setDeclaredAt(Instant declaredAt) { this.declaredAt = declaredAt; }
+
+    public LocalDate getEffectiveChangeDate() { return effectiveChangeDate; }
+    public void setEffectiveChangeDate(LocalDate effectiveChangeDate) { this.effectiveChangeDate = effectiveChangeDate; }
 
     public Instant getCanceledAt() { return canceledAt; }
     public void setCanceledAt(Instant canceledAt) { this.canceledAt = canceledAt; }

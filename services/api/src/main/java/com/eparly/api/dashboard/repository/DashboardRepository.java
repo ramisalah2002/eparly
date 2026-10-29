@@ -24,7 +24,7 @@ import java.util.UUID;
  * - TRANSFER → exclu des revenus et dépenses ordinaires
  * - REFUND → affiché dans unclassifiedPositive
  * - UNKNOWN positif → non qualifié, pas de revenu supposé
- * - UNKNOWN négatif → traité comme dépense
+ * - UNKNOWN négatif → exclu des dépenses identifiées et exposé séparément par le rapport mensuel
  */
 @Repository
 public interface DashboardRepository extends JpaRepository<Transaction, UUID> {
@@ -80,9 +80,48 @@ public interface DashboardRepository extends JpaRepository<Transaction, UUID> {
               AND t.booking_date >= :startDate
               AND t.booking_date <= :endDate
               AND (:accountId IS NULL OR t.account_id = :accountId)
+              AND a.currency = 'EUR'
               AND t.currency = 'EUR'
             """, nativeQuery = true)
     Map<String, Object> findSummary(
+            @Param("userId") UUID userId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("accountId") UUID accountId
+    );
+
+    /**
+     * Métadonnées de couverture du rapport et montants UNKNOWN négatifs.
+     * Les agrégats communs du rapport restent strictement limités à EUR.
+     */
+    @Query(value = """
+            SELECT
+                COUNT(*) AS all_transaction_count,
+                COUNT(*) FILTER (WHERE a.currency = 'EUR' AND t.currency = 'EUR') AS eur_transaction_count,
+                COUNT(*) FILTER (WHERE a.currency <> 'EUR' OR t.currency <> 'EUR') AS excluded_currency_transaction_count,
+                COUNT(DISTINCT t.account_id) FILTER (WHERE a.currency = 'EUR' AND t.currency = 'EUR') AS included_account_count,
+                COUNT(DISTINCT t.account_id) FILTER (WHERE a.currency <> 'EUR') AS incompatible_account_count,
+                MIN(t.booking_date) AS first_observed_date,
+                MAX(t.booking_date) AS last_observed_date,
+                COALESCE(STRING_AGG(DISTINCT t.currency, ', ' ORDER BY t.currency), '') AS currencies,
+                COALESCE(STRING_AGG(DISTINCT a.source_type, ', ' ORDER BY a.source_type), '') AS source_types,
+                COALESCE(SUM(
+                    CASE
+                        WHEN a.currency = 'EUR' AND t.currency = 'EUR'
+                             AND t.transaction_type = 'UNKNOWN'
+                             AND t.amount_minor < 0
+                        THEN ABS(t.amount_minor)
+                        ELSE 0
+                    END
+                ), 0) AS unclassified_negative
+            FROM transactions t
+            JOIN accounts a ON t.account_id = a.id
+            WHERE a.user_id = :userId
+              AND t.booking_date >= :startDate
+              AND t.booking_date <= :endDate
+              AND (:accountId IS NULL OR t.account_id = :accountId)
+            """, nativeQuery = true)
+    Map<String, Object> findReportCoverage(
             @Param("userId") UUID userId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
@@ -110,6 +149,7 @@ public interface DashboardRepository extends JpaRepository<Transaction, UUID> {
               AND t.booking_date >= :startDate
               AND t.booking_date <= :endDate
               AND (:accountId IS NULL OR t.account_id = :accountId)
+              AND a.currency = 'EUR'
               AND t.transaction_type IN ('EXPENSE', 'FEE')
               AND t.currency = 'EUR'
             GROUP BY t.category_id, c.name
@@ -163,6 +203,7 @@ public interface DashboardRepository extends JpaRepository<Transaction, UUID> {
               AND t.booking_date >= :startDate
               AND t.booking_date <= :endDate
               AND (:accountId IS NULL OR t.account_id = :accountId)
+              AND a.currency = 'EUR'
               AND t.currency = 'EUR'
             GROUP BY TO_CHAR(t.booking_date, 'YYYY-MM')
             ORDER BY month DESC
