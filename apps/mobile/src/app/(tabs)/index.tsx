@@ -1,4 +1,5 @@
 import * as Device from 'expo-device';
+import { useRouter } from 'expo-router';
 import { Alert, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { resetOnboarding } from '@/services/onboarding-storage';
 
 function getDevMenuHint() {
@@ -30,6 +32,9 @@ function getDevMenuHint() {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+
   const handleResetOnboarding = async () => {
     await resetOnboarding();
     Alert.alert(
@@ -38,14 +43,24 @@ export default function HomeScreen() {
     );
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace('/(auth)/sign-in');
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.heroSection}>
           <AnimatedIcon />
           <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
+            Welcome to&nbsp;Eparly
           </ThemedText>
+          {user?.email && (
+            <ThemedText type="small" style={{ color: '#737382', marginTop: 4 }}>
+              Signed in as {user.email}
+            </ThemedText>
+          )}
         </ThemedView>
 
         <ThemedText type="code" style={styles.code}>
@@ -67,8 +82,12 @@ export default function HomeScreen() {
             }
           />
           <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
+            title="Session"
+            hint={
+              <TouchableOpacity onPress={handleSignOut}>
+                <ThemedText type="code" style={{ color: '#E11D48' }}>sign out</ThemedText>
+              </TouchableOpacity>
+            }
           />
         </ThemedView>
 

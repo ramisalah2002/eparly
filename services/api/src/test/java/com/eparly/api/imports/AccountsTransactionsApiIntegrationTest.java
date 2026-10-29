@@ -159,7 +159,7 @@ class AccountsTransactionsApiIntegrationTest {
                 .andExpect(status().isCreated());
         var mailCaptor = org.mockito.ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(mailCaptor.capture());
-        Matcher tokenMatcher = Pattern.compile("(?m)^([A-Za-z0-9_-]{43})$").matcher(mailCaptor.getValue().getText());
+        Matcher tokenMatcher = Pattern.compile("(?m)^([0-9]{6})$").matcher(mailCaptor.getValue().getText());
         assertThat(tokenMatcher.find()).isTrue();
         mockMvc.perform(post("/v1/auth/verify-email").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\":\"" + tokenMatcher.group(1) + "\"}"))
