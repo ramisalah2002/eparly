@@ -22,7 +22,7 @@ CREATE TABLE catalog_sync_sources (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_catalog_sync_source_type CHECK (
-        source_type IN ('OFFICIAL_API', 'JSON_FEED', 'CSV_FEED', 'SITEMAP', 'JSON_LD', 'HTML_PAGE')
+        source_type IN ('OFFICIAL_API', 'JSON_FEED', 'SITEMAP', 'JSON_LD', 'HTML_PAGE')
     ),
     CONSTRAINT chk_catalog_sync_source_sector CHECK (
         sector IN ('STREAMING', 'MOBILE_PLAN', 'INTERNET_BOX')

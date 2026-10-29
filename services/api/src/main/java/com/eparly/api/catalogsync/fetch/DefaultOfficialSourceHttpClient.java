@@ -58,7 +58,11 @@ public class DefaultOfficialSourceHttpClient implements OfficialSourceHttpClient
 
     @Override
     public FetchResult fetch(CatalogSyncSource source, String url, String etag, String lastModified) {
-        URI current = trustPolicy.validate(source, url);
+        // Resolve URL placeholders (e.g., {apikey} -> actual API key from environment)
+        String resolvedUrl = UrlPlaceholderResolver.resolve(url);
+        
+        // Validate the resolved URL (this may throw if the domain is not trusted)
+        URI current = trustPolicy.validate(source, resolvedUrl);
         for (int redirect = 0; redirect <= properties.getMaxRedirects(); redirect++) {
             Response response = send(source, current, etag, lastModified);
             int status = response.statusCode();
