@@ -63,6 +63,7 @@ public class SecurityConfiguration {
                                 .permitAll();
                     }
                     authorize.requestMatchers("/v1/admin/catalog/**").hasAuthority("CATALOG_ADMIN");
+                    authorize.requestMatchers("/v1/admin/catalog-sync/**").hasAuthority("CATALOG_ADMIN");
                     authorize.anyRequest().authenticated();
                 })
                 .oauth2ResourceServer(resourceServer -> resourceServer

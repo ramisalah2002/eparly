@@ -104,13 +104,13 @@ class PostgresIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("V19 adds controlled catalogue administration and preserves the pricing schema")
-	void shouldApplyOfferPricingV19() {
+	@DisplayName("V20 adds source-controlled catalog observations and preserves prior schema")
+	void shouldApplyCatalogSyncV20() {
 		String latestVersion = jdbcTemplate.queryForObject(
 				"SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
 				String.class
 		);
-		assertThat(latestVersion).isEqualTo("19");
+		assertThat(latestVersion).isEqualTo("20");
 
 		Integer promotionPricingColumns = jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
@@ -159,6 +159,28 @@ class PostgresIntegrationTest {
 				  AND column_name = 'details' AND udt_name = 'jsonb'
 				""", Integer.class);
 		assertThat(auditDetailsType).isEqualTo(1);
+		Integer syncTables = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM information_schema.tables
+				WHERE table_schema = 'public'
+				  AND table_name IN ('catalog_sync_sources', 'catalog_sync_runs',
+				                     'catalog_offer_observations', 'catalog_offer_candidates')
+				""", Integer.class);
+		assertThat(syncTables).isEqualTo(4);
+		Integer jsonbObservationColumns = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_schema = 'public'
+				  AND table_name = 'catalog_offer_observations'
+				  AND column_name IN ('normalized_data', 'validation_reasons')
+				  AND udt_name = 'jsonb'
+				""", Integer.class);
+		assertThat(jsonbObservationColumns).isEqualTo(2);
+		Integer unsupportedPageCounter = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_schema = 'public'
+				  AND table_name = 'catalog_sync_runs'
+				  AND column_name = 'pages_unsupported'
+				""", Integer.class);
+		assertThat(unsupportedPageCounter).isEqualTo(1);
 
 		Integer nullableEvidenceDates = jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
