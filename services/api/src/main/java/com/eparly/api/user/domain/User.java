@@ -39,6 +39,9 @@ public class User {
     @Column(name = "email", nullable = false, length = 255)
     private String email;
 
+    @Column(name = "full_name", length = 100)
+    private String fullName;
+
     @NotNull
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
@@ -120,6 +123,14 @@ public class User {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
     }
 
     public String getPasswordHash() {

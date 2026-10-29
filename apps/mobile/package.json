@@ -44,6 +44,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "test": "node --test src/services/__tests__/api-client.test.mjs",
     "dev": "expo start"
   },
   "private": true

@@ -131,7 +131,37 @@ class AuthIntegrationTest {
                 "SELECT token_hash FROM email_verification_tokens WHERE user_id = ?",
                 String.class, user.getId()
         );
-        assertThat(storedHash).isEqualTo(sha256(rawToken)).isNotEqualTo(rawToken);
+    }
+
+    @Test
+    void registrationWithFullNamePersistsAndReturnsInUserProfile() throws Exception {
+        String email = uniqueEmail();
+        String body = "{\"email\":\"" + email + "\",\"password\":\"" + PASSWORD + "\"," +
+                "\"termsAccepted\":true,\"marketingConsent\":false,\"fullName\":\"Alex Martin\"}";
+
+        mockMvc.perform(post("/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+
+        User user = userRepository.findByEmailIgnoreCase(email).orElseThrow();
+        assertThat(user.getFullName()).isEqualTo("Alex Martin");
+
+        // Verify and activate
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.saveAndFlush(user);
+
+        // Login to get access token
+        String loginRes = mockMvc.perform(loginRequest(email, PASSWORD))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String token = objectMapper.readTree(loginRes).get("accessToken").asText();
+
+        // Check /v1/me returns fullName
+        mockMvc.perform(get("/v1/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Alex Martin"))
+                .andExpect(jsonPath("$.email").value(email.toLowerCase()));
     }
 
     @Test

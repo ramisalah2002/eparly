@@ -57,7 +57,7 @@ public class MeController {
                         settings.getCurrency(), settings.getCountry(), settings.getTimezone()
                 );
         return new UserProfileResponse(
-                user.getId(), user.getEmail(), user.getStatus(),
+                user.getId(), user.getEmail(), user.getFullName(), user.getStatus(),
                 user.getEmailVerifiedAt(), user.getCreatedAt(), profileSettings
         );
     }

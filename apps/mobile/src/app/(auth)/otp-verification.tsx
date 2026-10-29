@@ -37,11 +37,10 @@ export default function OtpVerificationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const params = useLocalSearchParams<{ email?: string; password?: string }>();
+  const params = useLocalSearchParams<{ email?: string; code?: string }>();
   const email = params.email || '';
-  const password = params.password || '';
 
-  const { verifyEmail, signIn } = useAuth();
+  const { verifyEmail } = useAuth();
 
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
@@ -76,14 +75,6 @@ export default function OtpVerificationScreen() {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
-  // Auto-focus first digit on mount
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      inputRefs.current[0]?.focus();
-    }, 350);
-    return () => clearTimeout(timer);
-  }, []);
-
   const handleVerify = useCallback(
     async (codeToVerify?: string) => {
       const code = codeToVerify || digits.join('');
@@ -98,18 +89,9 @@ export default function OtpVerificationScreen() {
       try {
         const res = await verifyEmail(code);
         if (res.success) {
-          if (email && password) {
-            // Automatically sign in upon successful verification
-            const loginRes = await signIn({ email, password });
-            if (loginRes.success) {
-              router.replace('/(tabs)');
-              return;
-            }
-          }
-
           Alert.alert(
             'Email Verified',
-            'Your email address has been verified! You can now sign in.',
+            'Your email address has been verified! You can now sign in to your account.',
             [
               {
                 text: 'Sign In',
@@ -126,8 +108,24 @@ export default function OtpVerificationScreen() {
         setIsVerifying(false);
       }
     },
-    [digits, email, password, router, signIn, verifyEmail]
+    [digits, router, verifyEmail]
   );
+
+  // Auto-focus first digit or auto-verify if code passed via deep link
+  useEffect(() => {
+    if (params.code && params.code.length === OTP_LENGTH) {
+      const initialDigits = params.code.split('');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDigits(initialDigits);
+      handleVerify(params.code);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [params.code, handleVerify]);
 
   const handleDigitChange = (text: string, index: number) => {
     setError(null);

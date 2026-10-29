@@ -16,6 +16,8 @@ public record RegisterRequest(
                 description = "Acceptation des conditions d'utilisation")
         boolean termsAccepted,
         @Schema(example = "false", description = "Consentement marketing facultatif")
-        boolean marketingConsent
+        boolean marketingConsent,
+        @Schema(example = "Alex Martin", description = "Nom complet de l'utilisateur (max 100 caractères)")
+        @Size(max = 100) String fullName
 ) {
 }

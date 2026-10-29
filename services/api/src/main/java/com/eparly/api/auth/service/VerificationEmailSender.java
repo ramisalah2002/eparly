@@ -14,7 +14,7 @@ public class VerificationEmailSender {
     public VerificationEmailSender(
             JavaMailSender mailSender,
             @Value("${eparly.mail.from}") String from,
-            @Value("${eparly.mail.verification-url}") String verificationUrl
+            @Value("${eparly.mail.verification-url:}") String verificationUrl
     ) {
         this.mailSender = mailSender;
         this.from = from;
@@ -26,9 +26,22 @@ public class VerificationEmailSender {
         message.setFrom(from);
         message.setTo(recipient);
         message.setSubject("Votre code de vérification Eparly : " + token);
-        message.setText("Bienvenue sur Eparly !\n\nPour vérifier votre adresse email, voici votre code à 6 chiffres :\n\n"
-                + token + "\n\nCe code expire selon la durée indiquée et ne peut être utilisé qu'une fois.\n"
-                + verificationUrl);
+
+        StringBuilder body = new StringBuilder();
+        body.append("Bienvenue sur Eparly !\n\n");
+        body.append("Pour vérifier votre adresse email, voici votre code à 6 chiffres :\n\n");
+        body.append(token).append("\n\n");
+        body.append("Ce code expire selon la durée indiquée et ne peut être utilisé qu'une seule fois.\n");
+        body.append("Vous pouvez entrer ce code directement dans l'application mobile Eparly.");
+
+        if (verificationUrl != null && !verificationUrl.isBlank()) {
+            String link = verificationUrl.contains("?")
+                    ? verificationUrl + "&code=" + token + "&email=" + recipient
+                    : verificationUrl + "?code=" + token + "&email=" + recipient;
+            body.append("\n\nOu cliquez sur ce lien depuis votre smartphone :\n").append(link);
+        }
+
+        message.setText(body.toString());
         mailSender.send(message);
     }
 }
