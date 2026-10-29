@@ -58,11 +58,13 @@ class UserDomainIntegrationTest {
     void shouldCreateUserSuccessfully() {
         User user = new User("jean.dupont@eparly.fr", "argon2id$v=19$m=65536,t=3,p=4$hashedSecret123");
         user.setStatus(UserStatus.ACTIVE);
+        user.setFullName("Jean Dupont");
         user.setEmailVerifiedAt(Instant.now());
 
         User savedUser = userRepository.saveAndFlush(user);
 
         assertThat(savedUser.getId()).isNotNull();
+        assertThat(savedUser.getFullName()).isEqualTo("Jean Dupont");
         assertThat(savedUser.getCreatedAt()).isNotNull();
         assertThat(savedUser.getUpdatedAt()).isNotNull();
         assertThat(savedUser.getStatus()).isEqualTo(UserStatus.ACTIVE);

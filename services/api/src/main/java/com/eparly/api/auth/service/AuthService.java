@@ -116,6 +116,9 @@ public class AuthService {
         }
 
         User user = new User(email, passwordEncoder.encode(request.password()));
+        if (request.fullName() != null && !request.fullName().isBlank()) {
+            user.setFullName(request.fullName().trim());
+        }
         user.setSettings(new UserSettings(user));
         try {
             userRepository.saveAndFlush(user);
@@ -170,7 +173,6 @@ public class AuthService {
         return login(request, "127.0.0.1");
     }
 
-    @Transactional
     public TokenResponse login(LoginRequest request, String clientIp) {
         String email = normalizeEmail(request.email());
         rateLimiter.checkPreLogin(clientIp, email);

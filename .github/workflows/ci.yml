@@ -43,6 +43,9 @@ jobs:
       - name: ESLint
         run: pnpm --filter mobile lint
 
+      - name: Unit and regression tests
+        run: pnpm --filter mobile test
+
       - name: Expo bundle validation
         run: |
           pnpm --filter mobile exec expo export --no-bytecode --no-minify --output-dir /tmp/expo-ci-bundle

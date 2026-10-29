@@ -119,15 +119,15 @@ export default function SignUpScreen() {
         password,
         termsAccepted: true,
         marketingConsent: false,
+        fullName: fullName.trim(),
       });
 
       if (res.success) {
-        // Navigate to dedicated 6-digit OTP verification screen
+        // Navigate to dedicated 6-digit OTP verification screen WITHOUT sensitive credentials
         router.push({
           pathname: '/(auth)/otp-verification',
           params: {
             email: email.trim(),
-            password,
           },
         });
       } else {

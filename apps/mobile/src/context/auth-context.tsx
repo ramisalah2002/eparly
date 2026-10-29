@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 import {
   fetchUserProfileApi,
+  getApiBaseUrl,
   LoginCredentials,
   loginToApi,
   logoutApi,
@@ -10,7 +11,9 @@ import {
   registerToApi,
   verifyEmailApi,
 } from '@/services/auth-api';
+import { configureApiClient } from '@/services/api-client';
 import {
+  cleanLegacyInsecureTokens,
   clearAuthSession,
   getAccessToken,
   getRefreshToken,
@@ -89,6 +92,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Purge any legacy insecure credentials stored by older versions
+    cleanLegacyInsecureTokens().catch(() => {});
+
+    // Sync session expiration from background API client
+    configureApiClient({
+      getBaseUrl: getApiBaseUrl,
+      onSessionExpired: () => {
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+        }
+      },
+    });
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     checkSession().finally(() => {

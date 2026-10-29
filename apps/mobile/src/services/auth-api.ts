@@ -8,6 +8,14 @@ import {
   saveUserProfile,
   StoredUserProfile,
 } from './session-storage';
+import {
+  authenticatedFetch,
+  configureApiClient,
+  executeSingleFlightRefresh,
+  setLoggingOut,
+} from './api-client';
+
+export { authenticatedFetch };
 
 export interface LoginCredentials {
   email: string;
@@ -19,6 +27,7 @@ export interface RegisterData {
   password: string;
   termsAccepted: boolean;
   marketingConsent?: boolean;
+  fullName?: string;
 }
 
 export interface TokenResponse {
@@ -150,6 +159,7 @@ export async function registerToApi(data: RegisterData): Promise<ApiResponse<Mes
         password: data.password,
         termsAccepted: data.termsAccepted,
         marketingConsent: Boolean(data.marketingConsent),
+        ...(data.fullName ? { fullName: data.fullName.trim() } : {}),
       }),
       signal: controller.signal,
     });
@@ -373,33 +383,33 @@ export async function resetPasswordApi(token: string, newPassword: string): Prom
   }
 }
 
+// Initialize client with dynamic base URL resolver
+configureApiClient({ getBaseUrl: getApiBaseUrl });
+
 /**
- * Rotates the refresh token and acquires a new access token.
+ * Rotates the refresh token and acquires a new access token using single-flight queueing.
  */
-export async function refreshTokensApi(refreshToken: string): Promise<ApiResponse<TokenResponse>> {
-  const baseUrl = getApiBaseUrl();
-  const endpoint = `${baseUrl}/v1/auth/refresh`;
-
+export async function refreshTokensApi(refreshToken?: string): Promise<ApiResponse<TokenResponse>> {
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    if (response.ok) {
-      const data = (await response.json()) as TokenResponse;
-      await saveAuthTokens(data.accessToken, data.refreshToken);
-      return { success: true, data };
+    const newAccessToken = await executeSingleFlightRefresh();
+    if (newAccessToken) {
+      const storedRefreshToken = (await getRefreshToken()) || '';
+      return {
+        success: true,
+        data: {
+          accessToken: newAccessToken,
+          refreshToken: storedRefreshToken,
+          tokenType: 'Bearer',
+          expiresIn: 900,
+          refreshExpiresIn: 604800,
+        },
+      };
     }
 
     return {
       success: false,
       error: 'Session expired. Please sign in again.',
-      statusCode: response.status,
+      statusCode: 401,
     };
   } catch {
     return { success: false, error: 'Network error during session renewal.' };
@@ -409,17 +419,11 @@ export async function refreshTokensApi(refreshToken: string): Promise<ApiRespons
 /**
  * Fetches the authenticated user profile (/v1/me).
  */
-export async function fetchUserProfileApi(accessToken: string): Promise<ApiResponse<StoredUserProfile>> {
-  const baseUrl = getApiBaseUrl();
-  const endpoint = `${baseUrl}/v1/me`;
-
+export async function fetchUserProfileApi(accessToken?: string): Promise<ApiResponse<StoredUserProfile>> {
   try {
-    const response = await fetch(endpoint, {
+    const response = await authenticatedFetch('/v1/me', {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-      },
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     });
 
     if (response.ok) {
@@ -442,6 +446,7 @@ export async function fetchUserProfileApi(accessToken: string): Promise<ApiRespo
  * Logs out and revokes the active session on the backend.
  */
 export async function logoutApi(): Promise<void> {
+  setLoggingOut(true);
   const baseUrl = getApiBaseUrl();
   const endpoint = `${baseUrl}/v1/auth/logout`;
 
@@ -458,5 +463,6 @@ export async function logoutApi(): Promise<void> {
     }
   } finally {
     await clearAuthSession();
+    setLoggingOut(false);
   }
 }

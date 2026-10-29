@@ -1,56 +1,86 @@
-# Welcome to your Expo app 👋
+# Eparly Mobile Application
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Cross-platform personal finance mobile client built with React Native, Expo, and Expo Router.
 
-## Get started
+---
 
-1. Install dependencies
+## Getting Started
 
-   ```bash
-   npm install
-   ```
+### Prerequisites
+- Node.js 20+ (Node 24 recommended)
+- pnpm 12+
+- Backend running on `http://localhost:8080` (or `http://<LAN_IP>:8080` for physical devices)
+- Mailpit running on `http://localhost:8025`
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+### Installation & Run
 ```bash
-npm run reset-project
+# Install dependencies from monorepo root
+pnpm install
+
+# Start Expo dev server
+pnpm --filter mobile dev
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+---
 
-### Other setup steps
+## Authentication & Security Architecture
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### 1. Secure Token Storage
+- **Native (iOS / Android)**: Tokens are stored exclusively in **Expo SecureStore** (`eparly_access_token`, `eparly_refresh_token`) using `AFTER_FIRST_UNLOCK` keychain access.
+- **No Insecure Fallback**: On native platforms, storage failures throw an explicit error rather than falling back to unencrypted `AsyncStorage`.
+- **Legacy Cleanup**: On initialization, any insecure tokens written to `AsyncStorage` by older builds are purged automatically via `cleanLegacyInsecureTokens()`.
+- **Non-sensitive Data**: User profiles (`eparly_user_profile`) and onboarding state are kept strictly segregated in `AsyncStorage`.
 
-## Learn more
+### 2. Session Lifecycle & State Machine
+The authentication state in `auth-context.tsx` tracks three states:
+1. **Loading / Restoring**: When the app starts, session tokens are restored and verified with `/v1/me`. Protected routes display a loading spinner and never expose authenticated screens prematurely.
+2. **Authenticated**: Active valid access token present. Full access to `(tabs)`.
+3. **Unauthenticated**: No active token or expired/revoked session. Automatically redirects to `/(auth)/sign-in`.
 
-To learn more about developing your project with Expo, look at the following resources:
+### 3. Route Protection Guard
+- Protected screens reside in `apps/mobile/src/app/(tabs)/_layout.tsx`.
+- Implements declarative route protection via `<Redirect href="/(auth)/sign-in" />`.
+- Prevents back-navigation leaks and redirect loops.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 4. Single-Flight Token Refresh
+- Located in `apps/mobile/src/services/api-client.ts`.
+- **Concurrent Request Deduplication**: If multiple simultaneous API requests receive HTTP 401, only **one single refresh request** is dispatched to the backend `/v1/auth/refresh`.
+- **In-flight Promise Sharing**: All waiting requests share the single in-flight promise and retry once using the newly rotated access token.
+- **Token Rotation Safety**: Respects backend single-use rotating refresh tokens, preventing token family reuse detection and accidental account lockouts.
+- **Infinite Loop Prevention**: Retried requests are marked with `_isRetry: true` and will never trigger another refresh attempt.
+- **Offline Resilience**: Transient network failures do not prematurely wipe the local refresh token.
 
-## Join the community
+### 5. Registration Contract (`fullName`)
+- Form collects: `Full Name` (required, 1–100 chars), `Email`, and `Password` (min 8 chars).
+- Sent payload:
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "Password123!",
+    "termsAccepted": true,
+    "marketingConsent": false,
+    "fullName": "Jane Doe"
+  }
+  ```
+- Persisted to backend `users.full_name` and returned in `/v1/me`.
 
-Join our community of developers creating universal apps.
+### 6. Email Verification & Deep Links
+- **Primary Flow**: 6-digit numeric OTP entered into `(auth)/otp-verification.tsx`.
+- **Deep Link**: Supported via `mobile://(auth)/otp-verification?code=123456&email=user@example.com`.
+- **Auto-Verification**: When opened via deep link, the 6 digits are pre-filled and verified automatically.
+- **Clean Handoff**: After verification, user proceeds cleanly to Sign In without plaintext passwords lingering in navigation history or state.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## Verification & Testing
+
+```bash
+# TypeScript validation
+pnpm --filter mobile typecheck
+
+# ESLint validation
+pnpm --filter mobile lint
+
+# Unit & regression tests (Single-flight refresh & Secure storage)
+pnpm --filter mobile test
+```
