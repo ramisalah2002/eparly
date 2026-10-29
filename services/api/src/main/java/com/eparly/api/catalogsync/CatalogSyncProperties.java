@@ -14,9 +14,11 @@ public class CatalogSyncProperties {
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration requestTimeout = Duration.ofSeconds(8);
     private Duration requestDelay = Duration.ofSeconds(1);
+    private Duration maxExecutionDuration = Duration.ofMinutes(10);
     private int maxResponseBytes = 2 * 1024 * 1024;
     private int maxPagesPerSource = 30;
     private int maxRedirects = 3;
+    private int maxRetries = 2;
     private boolean allowLoopbackForTests;
 
     public boolean isEnabled() { return enabled; }
@@ -35,12 +37,18 @@ public class CatalogSyncProperties {
     public void setRequestTimeout(Duration requestTimeout) { this.requestTimeout = requestTimeout; }
     public Duration getRequestDelay() { return requestDelay; }
     public void setRequestDelay(Duration requestDelay) { this.requestDelay = requestDelay; }
+    public Duration getMaxExecutionDuration() { return maxExecutionDuration; }
+    public void setMaxExecutionDuration(Duration maxExecutionDuration) {
+        this.maxExecutionDuration = maxExecutionDuration;
+    }
     public int getMaxResponseBytes() { return maxResponseBytes; }
     public void setMaxResponseBytes(int maxResponseBytes) { this.maxResponseBytes = maxResponseBytes; }
     public int getMaxPagesPerSource() { return maxPagesPerSource; }
     public void setMaxPagesPerSource(int maxPagesPerSource) { this.maxPagesPerSource = maxPagesPerSource; }
     public int getMaxRedirects() { return maxRedirects; }
     public void setMaxRedirects(int maxRedirects) { this.maxRedirects = maxRedirects; }
+    public int getMaxRetries() { return maxRetries; }
+    public void setMaxRetries(int maxRetries) { this.maxRetries = maxRetries; }
     public boolean isAllowLoopbackForTests() { return allowLoopbackForTests; }
     public void setAllowLoopbackForTests(boolean allowLoopbackForTests) {
         this.allowLoopbackForTests = allowLoopbackForTests;

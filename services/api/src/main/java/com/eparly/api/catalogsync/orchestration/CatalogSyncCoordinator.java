@@ -5,6 +5,8 @@ import com.eparly.api.catalogsync.discovery.SitemapDiscoveryService;
 import com.eparly.api.catalogsync.domain.CatalogObservationStatus;
 import com.eparly.api.catalogsync.domain.CatalogSourceType;
 import com.eparly.api.catalogsync.domain.CatalogSyncSource;
+import com.eparly.api.offer.domain.OfferSector;
+import com.eparly.api.catalogsync.extraction.AwinTelcoCsvExtractor;
 import com.eparly.api.catalogsync.extraction.HtmlCatalogOfferExtractor;
 import com.eparly.api.catalogsync.extraction.JsonCatalogOfferExtractor;
 import com.eparly.api.catalogsync.extraction.RawCatalogOffer;
@@ -38,6 +40,7 @@ public class CatalogSyncCoordinator {
     private final SitemapDiscoveryService sitemapDiscovery;
     private final JsonCatalogOfferExtractor jsonExtractor;
     private final HtmlCatalogOfferExtractor htmlExtractor;
+    private final AwinTelcoCsvExtractor awinTelcoCsvExtractor;
     private final OfferNormalizationService normalization;
     private final CatalogSyncProperties properties;
     private final Clock clock;
@@ -47,6 +50,7 @@ public class CatalogSyncCoordinator {
                                   RobotsPolicyService robotsPolicy, SitemapDiscoveryService sitemapDiscovery,
                                   JsonCatalogOfferExtractor jsonExtractor,
                                   HtmlCatalogOfferExtractor htmlExtractor,
+                                  AwinTelcoCsvExtractor awinTelcoCsvExtractor,
                                   OfferNormalizationService normalization,
                                   CatalogSyncProperties properties, Clock clock) {
         this.repository = repository;
@@ -55,20 +59,32 @@ public class CatalogSyncCoordinator {
         this.sitemapDiscovery = sitemapDiscovery;
         this.jsonExtractor = jsonExtractor;
         this.htmlExtractor = htmlExtractor;
+        this.awinTelcoCsvExtractor = awinTelcoCsvExtractor;
         this.normalization = normalization;
         this.properties = properties;
         this.clock = clock;
+        if (properties.getMaxExecutionDuration() == null
+                || properties.getMaxExecutionDuration().isZero()
+                || properties.getMaxExecutionDuration().isNegative()) {
+            throw new IllegalArgumentException("Catalog sync maximum execution duration must be positive");
+        }
     }
 
     public CatalogSyncRepository.SyncCounters collect(List<CatalogSyncSource> sources,
                                                        Map<String, String> sourceErrors) {
         robotsPolicy.beginRun();
         CatalogSyncRepository.SyncCounters counters = new CatalogSyncRepository.SyncCounters();
+        long deadlineNanos = System.nanoTime() + properties.getMaxExecutionDuration().toNanos();
         for (CatalogSyncSource source : sources) {
             if (stopping.get()) break;
+            if (deadlineReached(deadlineNanos)) {
+                counters.errorsCount++;
+                sourceErrors.put("run", "Maximum catalog sync execution duration reached");
+                break;
+            }
             counters.sourcesProcessed++;
             try {
-                FetchResult root = processSource(source, counters);
+                FetchResult root = processSource(source, counters, deadlineNanos);
                 if (root != null) {
                     repository.markSourceSuccess(source, root.etag(), root.lastModified(), clock.instant());
                 }
@@ -78,6 +94,7 @@ public class CatalogSyncCoordinator {
                 sourceErrors.put(source.id().toString(), safeMessage);
                 repository.markSourceError(source.id(), safeMessage, clock.instant());
                 log.warn("Catalog sync source {} failed: {}", source.id(), safeMessage);
+                if (exception instanceof RunDeadlineExceededException) break;
             }
         }
         return counters;
@@ -88,7 +105,9 @@ public class CatalogSyncCoordinator {
         stopping.set(true);
     }
 
-    private FetchResult processSource(CatalogSyncSource source, CatalogSyncRepository.SyncCounters counters) {
+    private FetchResult processSource(CatalogSyncSource source, CatalogSyncRepository.SyncCounters counters,
+                                      long deadlineNanos) {
+        ensureBeforeDeadline(deadlineNanos);
         boolean robotsAllowed;
         try {
             robotsAllowed = robotsPolicy.isAllowed(source, source.sourceUrl());
@@ -101,6 +120,7 @@ public class CatalogSyncCoordinator {
             return null;
         }
         repository.updateSourceRobotsStatus(source.id(), "ALLOWED", clock.instant());
+        ensureBeforeDeadline(deadlineNanos);
         FetchResult root = httpClient.fetch(source, source.sourceUrl(), source.etag(), source.lastModified());
         if (root.notModified()) {
             return root;
@@ -108,7 +128,7 @@ public class CatalogSyncCoordinator {
         counters.pagesFetched++;
         List<RawCatalogOffer> offers;
         if (source.sourceType() == CatalogSourceType.SITEMAP) {
-            offers = collectSitemapPages(source, root.body(), counters);
+            offers = collectSitemapPages(source, root.body(), counters, deadlineNanos);
         } else {
             offers = extract(source, root.body(), root.finalUri().toString());
             if (offers.isEmpty() && (source.sourceType() == CatalogSourceType.JSON_LD
@@ -118,6 +138,7 @@ public class CatalogSyncCoordinator {
         }
         for (RawCatalogOffer raw : offers) {
             if (stopping.get()) break;
+            ensureBeforeDeadline(deadlineNanos);
             NormalizedCatalogOffer normalized = normalization.normalize(raw, source.officialDomain());
             CatalogSyncRepository.ObservationResult saved =
                     repository.saveObservation(source, normalized, clock.instant());
@@ -135,11 +156,13 @@ public class CatalogSyncCoordinator {
     }
 
     private List<RawCatalogOffer> collectSitemapPages(CatalogSyncSource source, String sitemap,
-                                                      CatalogSyncRepository.SyncCounters counters) {
+                                                      CatalogSyncRepository.SyncCounters counters,
+                                                      long deadlineNanos) {
         List<String> urls = sitemapDiscovery.discover(sitemap, properties.getMaxPagesPerSource());
         List<RawCatalogOffer> offers = new ArrayList<>();
         for (String url : urls) {
             if (stopping.get()) break;
+            ensureBeforeDeadline(deadlineNanos);
             if (!robotsPolicy.isAllowed(source, url)) continue;
             FetchResult page = httpClient.fetch(source, url, null, null);
             if (page.notModified()) continue;
@@ -154,13 +177,35 @@ public class CatalogSyncCoordinator {
         return offers;
     }
 
+    private static void ensureBeforeDeadline(long deadlineNanos) {
+        if (deadlineReached(deadlineNanos)) throw new RunDeadlineExceededException();
+    }
+
+    private static boolean deadlineReached(long deadlineNanos) {
+        return System.nanoTime() - deadlineNanos >= 0;
+    }
+
+    private static final class RunDeadlineExceededException extends RuntimeException {
+        private RunDeadlineExceededException() {
+            super("Maximum catalog sync execution duration reached");
+        }
+    }
+
     private List<RawCatalogOffer> extract(CatalogSyncSource source, String body, String finalUrl) {
         return switch (source.sourceType()) {
             case JSON_FEED, OFFICIAL_API -> jsonExtractor.extractFeed(body, source.sector(), finalUrl);
+            case CSV_FEED -> extractCsvFeed(source, body);
             case JSON_LD -> extractPage(source, body, finalUrl);
             case HTML_PAGE -> htmlExtractor.extract(body, finalUrl, source.extractorConfig(), source.sector());
             case SITEMAP -> List.of();
         };
+    }
+
+    private List<RawCatalogOffer> extractCsvFeed(CatalogSyncSource source, String body) {
+        if (source.sector() == OfferSector.MOBILE_PLAN) {
+            return awinTelcoCsvExtractor.extract(body, source.sector());
+        }
+        throw new IllegalArgumentException("CSV_FEED is only supported for MOBILE_PLAN sector with Awin Telco format");
     }
 
     private List<RawCatalogOffer> extractPage(CatalogSyncSource source, String body, String finalUrl) {

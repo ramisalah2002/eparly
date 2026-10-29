@@ -4,6 +4,7 @@ import com.eparly.api.catalogsync.orchestration.CatalogSyncJobService;
 import com.eparly.api.catalogsync.domain.CatalogSourceType;
 import com.eparly.api.catalogsync.domain.CatalogSyncSource;
 import com.eparly.api.catalogsync.fetch.OfficialSourceHttpClient;
+import com.eparly.api.catalogsync.fetch.PinnedDnsResolver;
 import com.eparly.api.catalogsync.normalization.PriceNormalizationService;
 import com.eparly.api.catalogsync.extraction.HtmlCatalogOfferExtractor;
 import com.eparly.api.catalogsync.extraction.JsonCatalogOfferExtractor;
@@ -50,6 +51,7 @@ class CatalogSyncIntegrationTest {
     @Autowired private CatalogSyncJobService jobService;
     @Autowired private ApplicationContext applicationContext;
     @Autowired private OfficialSourceHttpClient httpClient;
+    @Autowired private PinnedDnsResolver pinnedDnsResolver;
     @Autowired private SourceTrustPolicy sourceTrustPolicy;
     @Autowired private JsonCatalogOfferExtractor jsonExtractor;
     @Autowired private HtmlCatalogOfferExtractor htmlExtractor;
@@ -104,6 +106,32 @@ class CatalogSyncIntegrationTest {
         assertThatThrownBy(() -> sourceTrustPolicy.validate(privateTarget, privateTarget.sourceUrl()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("non-public network address");
+        assertThatThrownBy(() -> pinnedDnsResolver.resolve("169.254.169.254"))
+                .isInstanceOf(java.net.UnknownHostException.class)
+                .hasMessageContaining("non-public network address");
+        var publicAddress = java.net.InetAddress.getByName("8.8.8.8");
+        var rebindingAddress = java.net.InetAddress.getByName("100.100.100.200");
+        assertThatThrownBy(() -> sourceTrustPolicy.validateResolvedAddresses("example.com",
+                new java.net.InetAddress[]{publicAddress, rebindingAddress}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non-public network address");
+        var documentationIpv6 = java.net.InetAddress.getByName("2001:db8::1");
+        assertThatThrownBy(() -> sourceTrustPolicy.validateResolvedAddresses("example.com",
+                new java.net.InetAddress[]{documentationIpv6}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non-public network address");
+        var documentationRangeIpv6 = java.net.InetAddress.getByName("3fff::1");
+        assertThatThrownBy(() -> sourceTrustPolicy.validateResolvedAddresses("example.com",
+                new java.net.InetAddress[]{documentationRangeIpv6}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non-public network address");
+
+        CatalogSyncSource nonstandardPort = new CatalogSyncSource(source.id(), null, "Port fixture",
+                "example.com", "https://example.com:8443/offers", CatalogSourceType.JSON_FEED,
+                OfferSector.STREAMING, true, "AUTHORIZED", null, null, "{}");
+        assertThatThrownBy(() -> sourceTrustPolicy.validate(nonstandardPort, nonstandardPort.sourceUrl()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("standard HTTPS port");
     }
 
     @AfterEach

@@ -40,9 +40,11 @@ eparly.catalog-sync.contact=
 eparly.catalog-sync.connect-timeout=PT3S
 eparly.catalog-sync.request-timeout=PT8S
 eparly.catalog-sync.request-delay=PT1S
+eparly.catalog-sync.max-execution-duration=PT10M
 eparly.catalog-sync.max-response-bytes=2097152
 eparly.catalog-sync.max-pages-per-source=30
 eparly.catalog-sync.max-redirects=3
+eparly.catalog-sync.max-retries=2
 ```
 
 Le scheduler est conditionnel et ne s'exécute pas au démarrage. Il est actif à
@@ -125,16 +127,28 @@ test et sert aux serveurs simulés locaux.
 Le `User-Agent` identifie Eparly ; un contact peut être configuré. Les requêtes d'un
 même hôte sont limitées en fréquence. Les réponses 429 et 5xx bénéficient de deux
 tentatives avec backoff borné et prise en compte plafonnée de `Retry-After`.
+Le nombre maximal de nouvelles tentatives (2 par défaut, au plus 5) et la durée
+globale coopérative sont configurables.
+L'arrêt sur durée maximale intervient entre les requêtes/pages ; une requête déjà
+en cours reste bornée par les timeouts et retries configurés.
 `ETag` et `Last-Modified` sont envoyés pour la source racine lorsque disponibles ;
 un 304 ne génère pas d'observation.
 
-La résolution DNS est vérifiée avant connexion mais n'est pas épinglée à l'adresse
-résolue par le client HTTP. Le déploiement doit donc également appliquer une
-politique de sortie réseau (pare-feu/egress) interdisant les réseaux privés et les
-endpoints de métadonnées cloud. La politique robots est volontairement
+La résolution utilisée par Apache HttpClient est épinglée par son `DnsResolver` :
+chaque réponse DNS est validée avant que ces adresses précises soient utilisées
+pour la connexion. Les adresses non globalement routables sont rejetées, y compris
+les plages privées, partagées, link-local, de documentation et les plages IPv6
+non globales. Seul le port HTTPS standard 443 est accepté hors profil de test.
+Chaque redirection repasse par les contrôles de domaine, port et DNS. Le déploiement
+doit également appliquer une politique de sortie réseau (pare-feu/egress)
+interdisant les réseaux privés et les endpoints de métadonnées cloud. La politique robots est volontairement
 conservatrice et ne tente pas de contourner CAPTCHA, protections anti-bot ou refus.
 Une autorisation technique ne remplace pas l'examen juridique des conditions
 d'utilisation et des licences.
+
+L'évaluation détaillée des sites candidats et leurs statuts de permission figure
+dans [`catalog-real-sources.md`](catalog-real-sources.md). Aucun site ne doit être
+activé sur la seule base de son accessibilité HTTP ou d'une règle robots permissive.
 
 ## Normalisation et confiance
 

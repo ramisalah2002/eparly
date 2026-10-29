@@ -53,8 +53,8 @@ public class CatalogSyncJobService {
                 String status = "SUCCEEDED";
                 try {
                     counters = coordinator.collect(sources, errors);
-                    if (!errors.isEmpty()) status = counters.sourcesProcessed == errors.size()
-                            ? "FAILED" : "PARTIAL_FAILURE";
+                    if (!errors.isEmpty()) status = counters.sourcesProcessed == 0
+                            || counters.errorsCount >= counters.sourcesProcessed ? "FAILED" : "PARTIAL_FAILURE";
                 } catch (RuntimeException exception) {
                     status = "FAILED";
                     counters.errorsCount++;
