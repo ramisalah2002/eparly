@@ -14,8 +14,16 @@ export const BRAND_COLORS = {
   pureWhite: '#FFFFFF',
   white: '#FFFFFF',
 
+  // Supporting chart & fintech accents
+  mutedMintGreen: '#59B99B',
+  softCoral: '#E89A91',
+  deepLavender: '#8067A1',
+  softGold: '#E7C778',
+
   // Borders & Accents
   borderLavender: 'rgba(168, 155, 190, 0.45)',
+  cardBorder: 'rgba(168, 155, 190, 0.20)',
+  cardShadow: 'rgba(36, 37, 53, 0.05)',
   secondaryButtonBg: 'rgba(255, 255, 255, 0.90)',
   secondaryButtonPressed: 'rgba(240, 236, 245, 0.95)',
 } as const;

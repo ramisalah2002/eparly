@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   titleContainer: {
     gap: Spacing.three,
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.six,
   },
   centerText: {
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderRadius: Spacing.five,
     justifyContent: 'center',
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   },
   sectionsWrapper: {
     gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three,
   },
   collapsibleContent: {
