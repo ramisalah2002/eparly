@@ -25,9 +25,9 @@ public class PasswordResetEmailSender {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);
         message.setTo(recipient);
-        message.setSubject("Réinitialisation de votre mot de passe Eparly");
-        message.setText("Pour réinitialiser votre mot de passe Eparly, utilisez ce jeton dans l'application :\n\n"
-                + token + "\n\nCe jeton expire dans 30 minutes et ne peut être utilisé qu'une seule fois.\n"
+        message.setSubject("Réinitialisation de votre mot de passe Eparly : " + token);
+        message.setText("Pour réinitialiser votre mot de passe Eparly, voici votre code à 6 chiffres :\n\n"
+                + token + "\n\nCe code expire dans 30 minutes et ne peut être utilisé qu'une seule fois.\n"
                 + resetUrl);
         mailSender.send(message);
     }

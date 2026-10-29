@@ -10,6 +10,7 @@ import com.eparly.api.auth.dto.RegisterRequest;
 import com.eparly.api.auth.dto.ResetPasswordRequest;
 import com.eparly.api.auth.dto.TokenResponse;
 import com.eparly.api.auth.dto.VerifyEmailRequest;
+import com.eparly.api.auth.dto.VerifyResetCodeRequest;
 import com.eparly.api.auth.service.AuthService;
 import com.eparly.api.auth.service.ClientIpResolver;
 import io.swagger.v3.oas.annotations.Operation;
@@ -154,6 +155,20 @@ public class AuthController {
         String clientIp = clientIpResolver.resolveClientIp(httpRequest);
         authService.forgotPassword(request.email(), clientIp);
         return new MessageResponse("If the account exists and can receive emails, a reset message has been sent");
+    }
+
+    @PostMapping("/verify-reset-code")
+    @Operation(summary = "Vérifier la validité du code de réinitialisation sans le consommer")
+    @ApiResponse(responseCode = "200", description = "Code de réinitialisation valide")
+    @ApiResponse(responseCode = "400", description = "Code invalide ou expiré",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "429", description = "Trop de tentatives de vérification",
+            headers = @Header(name = "Retry-After", description = "Nombre de secondes avant de pouvoir réitérer", schema = @Schema(type = "integer")),
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    public MessageResponse verifyResetCode(@Valid @RequestBody VerifyResetCodeRequest request, HttpServletRequest httpRequest) {
+        String clientIp = clientIpResolver.resolveClientIp(httpRequest);
+        authService.verifyResetCode(request.code(), clientIp);
+        return new MessageResponse("Reset code is valid");
     }
 
     @PostMapping("/reset-password")

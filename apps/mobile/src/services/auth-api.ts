@@ -266,6 +266,114 @@ export async function resendVerificationApi(email: string): Promise<ApiResponse<
 }
 
 /**
+ * Sends a 6-digit password reset code to the user's email address.
+ */
+export async function forgotPasswordApi(email: string): Promise<ApiResponse<MessageResponse>> {
+  const baseUrl = getApiBaseUrl();
+  const endpoint = `${baseUrl}/v1/auth/forgot-password`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as MessageResponse;
+      return { success: true, data };
+    }
+
+    let error = 'Unable to send password reset code.';
+    try {
+      const body = await response.json();
+      error = parseErrorMessage(body, error);
+    } catch {
+      // fallback
+    }
+
+    return { success: false, error, statusCode: response.status };
+  } catch {
+    return { success: false, error: 'Network error while requesting password reset code.' };
+  }
+}
+
+/**
+ * Verifies that the 6-digit reset code is valid and active before prompting for a new password.
+ */
+export async function verifyResetCodeApi(code: string): Promise<ApiResponse<MessageResponse>> {
+  const baseUrl = getApiBaseUrl();
+  const endpoint = `${baseUrl}/v1/auth/verify-reset-code`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ code: code.trim() }),
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as MessageResponse;
+      return { success: true, data };
+    }
+
+    let error = 'Invalid or expired reset code.';
+    try {
+      const body = await response.json();
+      error = parseErrorMessage(body, error);
+    } catch {
+      // fallback
+    }
+
+    return { success: false, error, statusCode: response.status };
+  } catch {
+    return { success: false, error: 'Network error while verifying reset code.' };
+  }
+}
+
+/**
+ * Resets the user's password using the verified code and new password.
+ */
+export async function resetPasswordApi(token: string, newPassword: string): Promise<ApiResponse<MessageResponse>> {
+  const baseUrl = getApiBaseUrl();
+  const endpoint = `${baseUrl}/v1/auth/reset-password`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ token: token.trim(), newPassword }),
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as MessageResponse;
+      return { success: true, data };
+    }
+
+    let error = 'Unable to reset password.';
+    try {
+      const body = await response.json();
+      error = parseErrorMessage(body, error);
+    } catch {
+      // fallback
+    }
+
+    return { success: false, error, statusCode: response.status };
+  } catch {
+    return { success: false, error: 'Network error while resetting password.' };
+  }
+}
+
+/**
  * Rotates the refresh token and acquires a new access token.
  */
 export async function refreshTokensApi(refreshToken: string): Promise<ApiResponse<TokenResponse>> {
