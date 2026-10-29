@@ -121,12 +121,15 @@ public class RefreshTokenService {
     }
 
     private TokenResponse tokenResponse(User user, String rawRefreshToken, Instant refreshExpiresAt) {
+        // La durée de validité est fixée par la propriété de configuration, pas par une deuxième
+        // lecture de l'horloge (évite une différence d'une seconde entre deux appels à clock.instant()).
+        long refreshExpiresInSeconds = Math.max(0, properties.ttl().getSeconds());
         return new TokenResponse(
                 accessTokenService.create(user),
                 "Bearer",
                 accessTokenService.expiresInSeconds(),
                 rawRefreshToken,
-                Math.max(0, refreshExpiresAt.getEpochSecond() - clock.instant().getEpochSecond())
+                refreshExpiresInSeconds
         );
     }
 

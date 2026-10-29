@@ -34,8 +34,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * - TRANSFER → exclu des revenus et dépenses ordinaires
  * - REFUND → affiché dans unclassifiedPositive
  * - UNKNOWN positif → non qualifié, jamais compté comme revenu
- * - UNKNOWN négatif → traité comme dépense (via EXPENSE/FEE rule, mais UNKNOWN n'est pas dans cette liste)
- *   → en fait, UNKNOWN négatif n'est ni dépense ni revenu, il reste dans unclassified
+ * - UNKNOWN négatif → exclu des dépenses identifiées et exposé séparément par le rapport mensuel
  *
  * Sécurité :
  * - Toutes les requêtes sont cloisonnées par userId

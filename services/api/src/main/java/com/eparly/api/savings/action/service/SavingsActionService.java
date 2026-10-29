@@ -1,0 +1,412 @@
+package com.eparly.api.savings.action.service;
+
+import com.eparly.api.auth.exception.ApiException;
+import com.eparly.api.auth.service.JwtUserId;
+import com.eparly.api.comparison.domain.ComparisonStatus;
+import com.eparly.api.comparison.dto.ComparisonOfferResult;
+import com.eparly.api.comparison.dto.ComparisonRequest;
+import com.eparly.api.comparison.service.ComparisonService;
+import com.eparly.api.comparison.strategy.ComparisonStrategy;
+import com.eparly.api.offer.domain.CommercialOffer;
+import com.eparly.api.offer.domain.OfferPricing;
+import com.eparly.api.offer.domain.OfferSector;
+import com.eparly.api.offer.repository.CommercialOfferRepository;
+import com.eparly.api.offer.repository.OfferEvidenceRepository;
+import com.eparly.api.offer.repository.OfferPricingRepository;
+import com.eparly.api.savings.action.domain.ActionStatus;
+import com.eparly.api.savings.action.domain.SavingsAction;
+import com.eparly.api.savings.action.domain.SavingsActionHistory;
+import com.eparly.api.savings.action.domain.VerificationStatus;
+import com.eparly.api.savings.action.dto.CreateSavingsActionRequest;
+import com.eparly.api.savings.action.dto.SavingsActionListResponse;
+import com.eparly.api.savings.action.dto.SavingsActionResponse;
+import com.eparly.api.savings.action.dto.SavingsEstimateSnapshot;
+import com.eparly.api.savings.action.dto.SavingsPlanSummaryResponse;
+import com.eparly.api.savings.action.dto.UpdateSavingsActionStatusRequest;
+import com.eparly.api.savings.action.repository.SavingsActionHistoryRepository;
+import com.eparly.api.savings.action.repository.SavingsActionRepository;
+import com.eparly.api.savings.dto.SavingsEstimateResponse;
+import com.eparly.api.savings.service.SavingsEstimationService;
+import com.eparly.api.subscription.domain.Subscription;
+import com.eparly.api.subscription.repository.SubscriptionRepository;
+import com.eparly.api.user.domain.User;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+@Transactional
+public class SavingsActionService {
+
+    private final SubscriptionRepository subscriptionRepository;
+    private final CommercialOfferRepository offerRepository;
+    private final OfferPricingRepository pricingRepository;
+    private final OfferEvidenceRepository offerEvidenceRepository;
+    private final SavingsEstimationService savingsEstimationService;
+    private final ComparisonService comparisonService;
+    private final List<ComparisonStrategy> comparisonStrategies;
+    private final SavingsActionRepository subscriptionActionRepository;
+    private final SavingsActionHistoryRepository subscriptionActionHistoryRepository;
+    private final Clock clock;
+
+    public SavingsActionService(
+            SubscriptionRepository subscriptionRepository,
+            CommercialOfferRepository offerRepository,
+            OfferPricingRepository pricingRepository,
+            OfferEvidenceRepository offerEvidenceRepository,
+            SavingsEstimationService savingsEstimationService,
+            ComparisonService comparisonService,
+            List<ComparisonStrategy> comparisonStrategies,
+            SavingsActionRepository subscriptionActionRepository,
+            SavingsActionHistoryRepository subscriptionActionHistoryRepository,
+            @Autowired(required = false) Clock clock) {
+        this.subscriptionRepository = subscriptionRepository;
+        this.offerRepository = offerRepository;
+        this.pricingRepository = pricingRepository;
+        this.offerEvidenceRepository = offerEvidenceRepository;
+        this.savingsEstimationService = savingsEstimationService;
+        this.comparisonService = comparisonService;
+        this.comparisonStrategies = comparisonStrategies;
+        this.subscriptionActionRepository = subscriptionActionRepository;
+        this.subscriptionActionHistoryRepository = subscriptionActionHistoryRepository;
+        this.clock = clock != null ? clock : Clock.systemUTC();
+    }
+
+    @Transactional
+    public SavingsActionResponse create(@AuthenticationPrincipal Jwt jwt, CreateSavingsActionRequest request) {
+        if (request == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Requête de création invalide");
+        }
+
+        UUID userId = JwtUserId.from(jwt);
+
+        Subscription subscription = subscriptionRepository.findByIdAndUserId(request.subscriptionId(), userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Abonnement introuvable"));
+
+        List<SavingsAction> existingActive = subscriptionActionRepository.findActiveActionsBySubscriptionAndOffer(
+                request.subscriptionId(), request.offerId());
+        if (!existingActive.isEmpty()) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Une action existe déjà pour cet abonnement et cette offre alternative");
+        }
+
+        Integer horizonMonths = request.horizonMonths() != null ? request.horizonMonths() : 12;
+
+        com.eparly.api.savings.dto.SavingsEstimateRequest estimateRequest =
+                new com.eparly.api.savings.dto.SavingsEstimateRequest(
+                        request.subscriptionId(),
+                        request.offerId(),
+                        request.sector(),
+                        horizonMonths,
+                        request.requirements(),
+                        request.userKnownCancellationFeeMinor(),
+                        request.userKnownOtherFeesMinor()
+                );
+
+        SavingsEstimateResponse estimate = savingsEstimationService.estimate(jwt, estimateRequest);
+
+        if (estimate.status() == com.eparly.api.savings.domain.SavingsStatus.INCOMPATIBLE_OFFER) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "L'offre alternative n'est pas compatible avec les critères de l'utilisateur");
+        }
+        if (estimate.status() == com.eparly.api.savings.domain.SavingsStatus.NOT_ELIGIBLE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "L'utilisateur n'est pas éligible pour cette offre");
+        }
+        if (estimate.status() == com.eparly.api.savings.domain.SavingsStatus.INSUFFICIENT_DATA) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Données insuffisantes pour créer une action d'économie");
+        }
+        if (estimate.status() == com.eparly.api.savings.domain.SavingsStatus.UNVERIFIED_OFFER) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "L'offre alternative n'est pas vérifiée");
+        }
+
+        if (estimate.estimatedNetSavingsMinor() == null || estimate.estimatedNetSavingsMinor() <= 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Aucun gain net positif estimé pour cette offre");
+        }
+
+        CommercialOffer offer = offerRepository.findById(request.offerId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Offre introuvable"));
+
+        SavingsAction action = new SavingsAction();
+        action.setUser(subscription.getUser());
+        action.setSubscription(subscription);
+        action.setAlternativeOffer(offer);
+        action.setStatus(ActionStatus.PLANNED);
+        action.setVerificationStatus(VerificationStatus.NOT_VERIFIED);
+        action.setHorizonMonths(horizonMonths);
+        action.setNotes(request.notes());
+
+        String currency = subscription.getCurrency() != null ? subscription.getCurrency() : "EUR";
+        SavingsEstimateSnapshot snapshot = buildSnapshot(estimate, horizonMonths, currency);
+        action.setEstimateSnapshot(snapshot);
+
+        try {
+            action = subscriptionActionRepository.saveAndFlush(action);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Une action existe déjà pour cet abonnement et cette offre alternative");
+        }
+
+        recordHistory(action, null, ActionStatus.PLANNED, "CREATED", "Action créée");
+
+        return toResponse(action);
+    }
+
+    public SavingsActionResponse get(@AuthenticationPrincipal Jwt jwt, UUID actionId) {
+        UUID userId = JwtUserId.from(jwt);
+        SavingsAction action = subscriptionActionRepository.findByIdAndUserId(actionId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Action introuvable"));
+
+        return toResponse(action);
+    }
+
+    public SavingsActionListResponse list(@AuthenticationPrincipal Jwt jwt,
+                                          ActionStatus status,
+                                          UUID subscriptionId,
+                                          int page, int size) {
+        UUID userId = JwtUserId.from(jwt);
+
+        if (size > 100) size = 100;
+        if (size < 1) size = 20;
+        if (page < 0) page = 0;
+
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        Page<SavingsAction> pageResult;
+        if (subscriptionId != null) {
+            pageResult = subscriptionActionRepository.findAllByUserIdAndSubscriptionId(userId, subscriptionId, status, pageable);
+        } else {
+            pageResult = subscriptionActionRepository.findAllByUserIdFiltered(userId, status, pageable);
+        }
+
+        List<SavingsActionResponse> content = pageResult.getContent().stream()
+                .map(a -> {
+                    return toResponse(a);
+                })
+                .toList();
+
+        return new SavingsActionListResponse(
+                content,
+                pageResult.getNumber(),
+                pageResult.getSize(),
+                pageResult.getTotalElements(),
+                pageResult.getTotalPages()
+        );
+    }
+
+    @Transactional
+    public SavingsActionResponse updateStatus(@AuthenticationPrincipal Jwt jwt, UUID actionId,
+                                              UpdateSavingsActionStatusRequest request) {
+        UUID userId = JwtUserId.from(jwt);
+        SavingsAction action = subscriptionActionRepository.findByIdAndUserId(actionId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Action introuvable"));
+
+        ActionStatus previous = action.getStatus();
+        ActionStatus next = request.status();
+
+        validateTransition(previous, next);
+
+        if (previous == next) {
+            if (request.notes() != null && !request.notes().isBlank()) {
+                action.setNotes(request.notes());
+                action = subscriptionActionRepository.save(action);
+            }
+            return toResponse(action);
+        }
+
+        Instant now = clock.instant();
+        if (next == ActionStatus.COMMITTED) {
+            action.setCommittedAt(now);
+        } else if (next == ActionStatus.DECLARED) {
+            action.setDeclaredAt(now);
+        } else if (next == ActionStatus.CANCELED) {
+            action.setCanceledAt(now);
+        }
+        action.setStatus(next);
+        if (request.notes() != null && !request.notes().isBlank()) {
+            action.setNotes(request.notes());
+        }
+
+        action = subscriptionActionRepository.save(action);
+
+        recordHistory(action, previous, next, "STATUS_CHANGE", request.notes());
+
+        return toResponse(action);
+    }
+
+    public SavingsPlanSummaryResponse summary(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = JwtUserId.from(jwt);
+
+        long total = subscriptionActionRepository.countByUserId(userId);
+        long planned = subscriptionActionRepository.countByUserIdAndStatus(userId, ActionStatus.PLANNED);
+        long committed = subscriptionActionRepository.countByUserIdAndStatus(userId, ActionStatus.COMMITTED);
+        long declared = subscriptionActionRepository.countByUserIdAndStatus(userId, ActionStatus.DECLARED);
+        long canceled = subscriptionActionRepository.countByUserIdAndStatus(userId, ActionStatus.CANCELED);
+
+        List<SavingsAction> all = subscriptionActionRepository.findAllByUserIdFiltered(userId, null, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+
+        String currency = "EUR";
+        Integer horizonMonths = 12;
+        for (SavingsAction a : all) {
+            if (a.getEstimateSnapshot() != null && a.getEstimateSnapshot().currency() != null) {
+                currency = a.getEstimateSnapshot().currency();
+                if (a.getEstimateSnapshot().horizonMonths() != null) {
+                    horizonMonths = a.getEstimateSnapshot().horizonMonths();
+                }
+                break;
+            }
+        }
+
+        final String finalCurrency = currency;
+        final Integer finalHorizon = horizonMonths;
+
+        Long potentialSavings = all.stream()
+                .filter(a -> a.getStatus() != ActionStatus.CANCELED
+                        && a.getEstimateSnapshot() != null
+                        && finalCurrency.equalsIgnoreCase(a.getEstimateSnapshot().currency())
+                        && (a.getEstimateSnapshot().horizonMonths() == null || finalHorizon.equals(a.getEstimateSnapshot().horizonMonths()))
+                        && a.getEstimateSnapshot().potentialNetSavingsMinor() != null)
+                .mapToLong(a -> a.getEstimateSnapshot().potentialNetSavingsMinor())
+                .sum();
+
+        Long committedSavings = all.stream()
+                .filter(a -> a.getStatus() == ActionStatus.COMMITTED
+                        && a.getEstimateSnapshot() != null
+                        && finalCurrency.equalsIgnoreCase(a.getEstimateSnapshot().currency())
+                        && (a.getEstimateSnapshot().horizonMonths() == null || finalHorizon.equals(a.getEstimateSnapshot().horizonMonths()))
+                        && a.getEstimateSnapshot().potentialNetSavingsMinor() != null)
+                .mapToLong(a -> a.getEstimateSnapshot().potentialNetSavingsMinor())
+                .sum();
+
+        Long declaredSavings = all.stream()
+                .filter(a -> a.getStatus() == ActionStatus.DECLARED
+                        && a.getEstimateSnapshot() != null
+                        && finalCurrency.equalsIgnoreCase(a.getEstimateSnapshot().currency())
+                        && (a.getEstimateSnapshot().horizonMonths() == null || finalHorizon.equals(a.getEstimateSnapshot().horizonMonths()))
+                        && a.getEstimateSnapshot().potentialNetSavingsMinor() != null)
+                .mapToLong(a -> a.getEstimateSnapshot().potentialNetSavingsMinor())
+                .sum();
+
+        return new SavingsPlanSummaryResponse(
+                (int) total,
+                (int) planned,
+                (int) committed,
+                (int) declared,
+                (int) canceled,
+                potentialSavings,
+                committedSavings,
+                declaredSavings,
+                null,
+                "NOT_VERIFIED",
+                currency,
+                horizonMonths,
+                "Les économies potentielles sont des estimations, pas des gains acquis. " +
+                        "Aucune économie n'est considérée comme réalisée sans vérification bancaire."
+        );
+    }
+
+    private void validateTransition(ActionStatus from, ActionStatus to) {
+        if (from == to) {
+            return;
+        }
+        switch (from) {
+            case PLANNED:
+                if (to != ActionStatus.COMMITTED && to != ActionStatus.CANCELED) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST,
+                            "Transition non autorisée de PLANNED vers " + to);
+                }
+                break;
+            case COMMITTED:
+                if (to != ActionStatus.DECLARED && to != ActionStatus.CANCELED) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST,
+                            "Transition non autorisée de COMMITTED vers " + to);
+                }
+                break;
+            case DECLARED:
+                if (to != ActionStatus.CANCELED) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST,
+                            "Transition non autorisée de DECLARED vers " + to);
+                }
+                break;
+            case CANCELED:
+                throw new ApiException(HttpStatus.BAD_REQUEST,
+                        "Une action annulée ne peut pas passer à un autre statut");
+        }
+    }
+
+    private void recordHistory(SavingsAction action, ActionStatus previous, ActionStatus next,
+                               String eventType, String details) {
+        SavingsActionHistory h = new SavingsActionHistory();
+        h.setAction(action);
+        h.setPreviousStatus(previous);
+        h.setNewStatus(next);
+        h.setCreatedAt(clock.instant());
+        h.setEventType(eventType);
+        h.setDetails(details);
+        subscriptionActionHistoryRepository.save(h);
+    }
+
+    private SavingsEstimateSnapshot buildSnapshot(SavingsEstimateResponse estimate, Integer horizonMonths, String currency) {
+        return new SavingsEstimateSnapshot(
+                "1.0.0",
+                horizonMonths,
+                currency != null ? currency : "EUR",
+                estimate.currentTotalCostMinor(),
+                estimate.currentCostSource(),
+                estimate.alternativeTotalCostMinor(),
+                estimate.totalSwitchingCostMinor(),
+                estimate.estimatedNetSavingsMinor(),
+                estimate.status(),
+                estimate.offerVerifiedAt(),
+                estimate.estimatedAt(),
+                estimate.assumptions(),
+                estimate.missingInformation(),
+                estimate.officialUrl()
+        );
+    }
+
+    private SavingsActionResponse toResponse(SavingsAction action) {
+        boolean estimateMayBeStale = action.getEstimateSnapshot() != null
+                && action.getEstimateSnapshot().offerVerifiedAt() != null
+                && action.getEstimateSnapshot().offerVerifiedAt().isBefore(clock.instant().minusSeconds(86400 * 30));
+
+        return new SavingsActionResponse(
+                action.getId(),
+                action.getSubscription().getId(),
+                action.getSubscription().getName(),
+                action.getSubscription().getProvider(),
+                action.getAlternativeOffer().getId(),
+                action.getAlternativeOffer().getCommercialName(),
+                action.getAlternativeOffer().getProvider().getName(),
+                action.getAlternativeOffer().getSector().name(),
+                action.getStatus(),
+                action.getVerificationStatus(),
+                action.getHorizonMonths(),
+                action.getCreatedAt(),
+                action.getUpdatedAt(),
+                action.getCommittedAt(),
+                action.getDeclaredAt(),
+                action.getCanceledAt(),
+                action.getEstimateSnapshot(),
+                estimateMayBeStale,
+                action.getNotes()
+        );
+    }
+}

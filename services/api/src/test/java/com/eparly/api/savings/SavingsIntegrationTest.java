@@ -183,7 +183,7 @@ class SavingsIntegrationTest {
         p.setAmountMinor(amount);
         p.setCurrency("EUR");
         p.setBillingPeriod(period);
-        // Valeur par défaut 0L si aucun frais d'activation n'est spécifié
+        // 0L = aucun frais d'activation connu (valeur connue, pas inconnue)
         p.setActivationFeeMinor(activationFee != null ? activationFee : 0L);
         p.setPriceAfterPromotionMinor(priceAfterPromo);
         p.setPromotionPercent(promoPercent);
@@ -302,7 +302,7 @@ class SavingsIntegrationTest {
         createEvidence(offer, "https://mobile-alt.com/999", EvidenceStatus.VERIFIED);
 
         JsonNode resp = doEvaluate(user, sub.getId(), offer.getId(), OfferSector.MOBILE_PLAN,
-                12, Map.of("minDataGb", 100, "requires5G", true), 1500L, null);
+                12, Map.of("minDataGb", 100, "requires5G", true), 1500L, 0L);
 
         // 19.99 * 12 = 239.88, 9.99 * 12 = 119.88, 239.88 - 119.88 - 15.00 = 105.00
         assertThat(resp.path("status").asText()).isEqualTo("SAVINGS_POSSIBLE");
@@ -378,11 +378,11 @@ class SavingsIntegrationTest {
 
         JsonNode resp = doEvaluate(user, sub.getId(), offer.getId(), OfferSector.MOBILE_PLAN,
                 12, Map.of("minDataGb", 100, "requires5G", true), null, null);
-        // 3 mois à 999 + 9 mois à 1999 = 2997 + 17991 = 20988
+        // 3 mois à 1000 (1999 * 50% = 999.5, arrondi à 1000) + 9 mois à 1999 = 3000 + 17991 = 20991
         // Actuel: 1999 * 12 = 23988
-        // Économie: 23988 - 20988 = 3000
+        // Économie: 23988 - 20991 = 2997
         assertThat(resp.path("status").asText()).isEqualTo("SAVINGS_POSSIBLE");
-        assertThat(resp.path("estimatedNetSavingsMinor").asLong()).isEqualTo(3000L);
+        assertThat(resp.path("estimatedNetSavingsMinor").asLong()).isEqualTo(2997L);
     }
 
     /* ---------- 7. Promotion expirée ---------- */

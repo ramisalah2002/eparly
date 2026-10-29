@@ -28,6 +28,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -140,11 +142,14 @@ public class SavingsEstimationService {
         Long currentTotalCost = pricingService.calculateTotalCost(currentMonthlyCost, currentPeriod, horizonMonths);
 
         // Coût alternatif avec promotion
-        // Le prix pendant la promotion = amountMinor * (1 - promotionPercent/100)
+        // Le prix pendant la promotion = amountMinor * (1 - promotionPercent/100), arrondi au centime près
         OfferBillingPeriod altPeriod = pricing.getBillingPeriod();
         Long promotionPriceMinor = null;
         if (pricing.getAmountMinor() != null && pricing.getPromotionPercent() != null) {
-            promotionPriceMinor = pricing.getAmountMinor() * (100 - pricing.getPromotionPercent()) / 100;
+            promotionPriceMinor = BigDecimal.valueOf(pricing.getAmountMinor())
+                    .multiply(BigDecimal.valueOf(100 - pricing.getPromotionPercent()))
+                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+                    .longValue();
         }
         Long altTotalCost = pricingService.calculateTotalCostWithPromotion(
                 pricing.getAmountMinor(),
@@ -157,8 +162,8 @@ public class SavingsEstimationService {
         // 5. Frais de changement
         Long cancellationFee = request.userKnownCancellationFeeMinor();
         Long activationFee = pricing.getActivationFeeMinor();
-        // Autres frais stockés en JSON textuel : considérés comme non documentés (0 = aucun frais déclaré)
-        Long otherFees = 0L;
+        // Autres frais fournis par l'utilisateur (inconnus si non renseignés)
+        Long otherFees = request.userKnownOtherFeesMinor();
 
         SwitchingCostService.SwitchingCostResult switchingResult =
                 switchingCostService.calculateWithMissingInfo(cancellationFee, activationFee, otherFees);
