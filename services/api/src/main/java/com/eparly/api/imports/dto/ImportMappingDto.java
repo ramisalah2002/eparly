@@ -15,6 +15,8 @@ public record ImportMappingDto(
         @Schema(description = "Colonne des credits (avec debitColumn)", nullable = true) String creditColumn,
         @Schema(description = "Colonne de la devise (optionnelle, doit correspondre au compte)", nullable = true) String currencyColumn,
         @Schema(description = "Colonne d'un identifiant de transaction fiable et unique (optionnelle)", nullable = true) String sourceIdColumn,
+        @Schema(description = "Colonne de la categorie bancaire (optionnelle)", nullable = true) String categoryColumn,
+        @Schema(description = "Colonne de la sous-categorie bancaire (optionnelle)", nullable = true) String subcategoryColumn,
         @Schema(description = "Format de date : AUTO (preview uniquement) ou pattern de la liste blanche "
                 + "(dd/MM/yyyy, dd-MM-yyyy, dd.MM.yyyy, yyyy-MM-dd, yyyy/MM/dd, MM/dd/yyyy, MM-dd-yyyy, yyyyMMdd). "
                 + "Doit etre explicite pour l'import.", example = "dd/MM/yyyy") String dateFormat,
@@ -24,11 +26,12 @@ public record ImportMappingDto(
     public static ImportMappingDto from(ImportMapping mapping) {
         return new ImportMappingDto(mapping.dateColumn(), mapping.valueDateColumn(), mapping.labelColumn(),
                 mapping.amountColumn(), mapping.debitColumn(), mapping.creditColumn(), mapping.currencyColumn(),
-                mapping.sourceIdColumn(), mapping.dateFormat(), mapping.amountFormat());
+                mapping.sourceIdColumn(), mapping.categoryColumn(), mapping.subcategoryColumn(),
+                mapping.dateFormat(), mapping.amountFormat());
     }
 
     public ImportMapping toMapping() {
         return new ImportMapping(dateColumn, valueDateColumn, labelColumn, amountColumn, debitColumn, creditColumn,
-                currencyColumn, sourceIdColumn, dateFormat, amountFormat);
+                currencyColumn, sourceIdColumn, categoryColumn, subcategoryColumn, dateFormat, amountFormat);
     }
 }

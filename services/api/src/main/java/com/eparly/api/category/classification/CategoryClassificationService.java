@@ -48,6 +48,120 @@ public class CategoryClassificationService {
     }
 
     /**
+     * Classifie une transaction à partir des catégories et sous-catégories fournies dans le CSV bancaire.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Category> classifyCategory(String categoryName, String subcategoryName) {
+        if (categoryName == null || categoryName.isBlank()) {
+            return Optional.empty();
+        }
+        String cat = categoryName.trim();
+        String sub = subcategoryName != null ? subcategoryName.trim() : "";
+
+        if (containsIgnoreCase(cat, "Loisir")) {
+            if (containsIgnoreCase(sub, "Restaurant") || containsIgnoreCase(sub, "bar") || containsIgnoreCase(sub, "discotheque") || containsIgnoreCase(sub, "discothèque")) {
+                return Optional.ofNullable(this.categoryByName.get("Restaurants"));
+            }
+            return Optional.ofNullable(this.categoryByName.get("Loisirs"));
+        }
+        if (containsIgnoreCase(cat, "Vie quotidienne")) {
+            if (containsIgnoreCase(sub, "Alimentation")) {
+                return Optional.ofNullable(this.categoryByName.get("Courses"));
+            }
+            if (containsIgnoreCase(sub, "Vetement") || containsIgnoreCase(sub, "Vêtement") || containsIgnoreCase(sub, "Electronique")
+                    || containsIgnoreCase(sub, "Mobilier") || containsIgnoreCase(sub, "Livre")
+                    || containsIgnoreCase(sub, "Equipement") || containsIgnoreCase(sub, "Bien-etre") || containsIgnoreCase(sub, "Bien-être")) {
+                return Optional.ofNullable(this.categoryByName.get("Shopping"));
+            }
+            return Optional.ofNullable(this.categoryByName.get("Autres dépenses"));
+        }
+        if (containsIgnoreCase(cat, "Voyage") || containsIgnoreCase(cat, "Transport") || containsIgnoreCase(cat, "Auto")) {
+            if (containsIgnoreCase(sub, "Assurance")) {
+                return Optional.ofNullable(this.categoryByName.get("Abonnements"));
+            }
+            return Optional.ofNullable(this.categoryByName.get("Transport"));
+        }
+        if (containsIgnoreCase(cat, "Abonnement")) {
+            return Optional.ofNullable(this.categoryByName.get("Abonnements"));
+        }
+        if (containsIgnoreCase(cat, "Revenu") || containsIgnoreCase(cat, "Allocation") || containsIgnoreCase(cat, "Salaire")) {
+            return Optional.ofNullable(this.categoryByName.get("Revenus"));
+        }
+        if (containsIgnoreCase(cat, "Virement") || containsIgnoreCase(cat, "epargne") || containsIgnoreCase(cat, "épargne")) {
+            return Optional.ofNullable(this.categoryByName.get("Virements"));
+        }
+        if (containsIgnoreCase(cat, "financier") || containsIgnoreCase(cat, "bancaire") || containsIgnoreCase(cat, "Emprunt")) {
+            return Optional.ofNullable(this.categoryByName.get("Frais bancaires"));
+        }
+        if (containsIgnoreCase(cat, "Sante") || containsIgnoreCase(cat, "Santé")) {
+            return Optional.ofNullable(this.categoryByName.get("Santé"));
+        }
+        if (containsIgnoreCase(cat, "Logement")) {
+            return Optional.ofNullable(this.categoryByName.get("Logement"));
+        }
+        if (containsIgnoreCase(cat, "Restaurant")) {
+            return Optional.ofNullable(this.categoryByName.get("Restaurants"));
+        }
+        if (containsIgnoreCase(cat, "Course") || containsIgnoreCase(cat, "Supermarche") || containsIgnoreCase(cat, "Supermarché")) {
+            return Optional.ofNullable(this.categoryByName.get("Courses"));
+        }
+        if (containsIgnoreCase(cat, "Shopping")) {
+            return Optional.ofNullable(this.categoryByName.get("Shopping"));
+        }
+
+        // Correspondance directe insensible aux majuscules / accents
+        for (Map.Entry<String, Category> entry : this.categoryByName.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(cat) || containsIgnoreCase(cat, entry.getKey())) {
+                return Optional.of(entry.getValue());
+            }
+        }
+
+        return Optional.ofNullable(this.categoryByName.get("Autres dépenses"));
+    }
+
+    private static boolean containsIgnoreCase(String str, String searchStr) {
+        if (str == null || searchStr == null) return false;
+        return str.toLowerCase(java.util.Locale.ROOT).contains(searchStr.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /**
+     * Catégorise une transaction en combinant le libellé et les informations CSV de la banque.
+     * Le libellé prévaut pour les types d'opérations formels (ex: Virements, Salaires, Loyer),
+     * évitant les erreurs de classification de la banque exportatrice (ex: VIR INSTANTANE marqué Loisirs/Restaurants).
+     */
+    @Transactional(readOnly = true)
+    public Optional<Category> classify(String rawLabel, String normalizedLabel, String rawCategory, String rawSubcategory) {
+        String labelToCheck = normalizedLabel != null && !normalizedLabel.isBlank() ? normalizedLabel : rawLabel;
+
+        // 1. Si le libellé indique clairement un virement, priorité absolue au type virement
+        if (isVirement(labelToCheck)) {
+            if (isRevenu(labelToCheck)) {
+                return Optional.ofNullable(this.categoryByName.get("Revenus"));
+            }
+            if (isLogement(labelToCheck)) {
+                return Optional.ofNullable(this.categoryByName.get("Logement"));
+            }
+            return Optional.ofNullable(this.categoryByName.get("Virements"));
+        }
+
+        // 2. Si le libellé indique un revenu formel (salaire, allocation, etc.)
+        if (isRevenu(labelToCheck)) {
+            return Optional.ofNullable(this.categoryByName.get("Revenus"));
+        }
+
+        // 3. Catégorie CSV fournie par la banque si disponible
+        if (rawCategory != null && !rawCategory.isBlank()) {
+            Optional<Category> fromCsv = classifyCategory(rawCategory, rawSubcategory);
+            if (fromCsv.isPresent()) {
+                return fromCsv;
+            }
+        }
+
+        // 4. Moteur de règles sur libellé normalisé
+        return classify(normalizedLabel != null && !normalizedLabel.isBlank() ? normalizedLabel : rawLabel);
+    }
+
+    /**
      * Classifie une transaction à partir de son libellé normalisé.
      *
      * @param normalizedLabel le libellé normalisé (majuscules, sans accents, espaces réduits)
@@ -58,6 +172,22 @@ public class CategoryClassificationService {
         if (normalizedLabel == null || normalizedLabel.isBlank()) {
             return Optional.empty();
         }
+
+        // 0. Détection prioritaire des virements et transferts
+        if (isVirement(normalizedLabel)) {
+            if (isRevenu(normalizedLabel)) {
+                return Optional.ofNullable(this.categoryByName.get("Revenus"));
+            }
+            if (isLogement(normalizedLabel)) {
+                return Optional.ofNullable(this.categoryByName.get("Logement"));
+            }
+            return Optional.ofNullable(this.categoryByName.get("Virements"));
+        }
+        if (isRevenu(normalizedLabel)) {
+            return Optional.ofNullable(this.categoryByName.get("Revenus"));
+        }
+
+        // 1. Essai direct sur le libellé brut
         for (CategoryRule rule : this.rules) {
             Optional<Category> result = rule.classify(normalizedLabel);
             if (result.isPresent()) {
@@ -66,7 +196,65 @@ public class CategoryClassificationService {
                 return result;
             }
         }
+
+        // 2. Essai après suppression des préfixes bancaires courants (ex: CARTE X6271 29/08 CARREFOUR -> CARREFOUR)
+        String stripped = stripBankPrefix(normalizedLabel);
+        if (!stripped.equals(normalizedLabel) && !stripped.isBlank()) {
+            for (CategoryRule rule : this.rules) {
+                Optional<Category> result = rule.classify(stripped);
+                if (result.isPresent()) {
+                    log.debug("Classified stripped label with rule (specificity={}): category={}",
+                            rule.specificity(), result.get().getName());
+                    return result;
+                }
+            }
+        }
+
         return Optional.empty();
+    }
+
+    public static boolean isVirement(String label) {
+        if (label == null || label.isBlank()) return false;
+        String upper = label.toUpperCase(java.util.Locale.ROOT);
+        return upper.contains("VIR INSTANTANE")
+                || upper.contains("VIR EMIS")
+                || upper.contains("VIR RECU")
+                || upper.contains("VIREMENT")
+                || upper.contains("ORDRE VIREMENT")
+                || upper.contains("TRANSFERT")
+                || upper.contains("LOGITEL")
+                || upper.contains("WERO")
+                || upper.matches(".*\\bVIR\\b.*")
+                || upper.matches("^\\d{6}\\s+VIR.*");
+    }
+
+    public static boolean isRevenu(String label) {
+        if (label == null || label.isBlank()) return false;
+        String upper = label.toUpperCase(java.util.Locale.ROOT);
+        return upper.contains("SALAIRE")
+                || upper.contains("REMUNERATION")
+                || upper.contains("TRAITEMENT")
+                || upper.contains("ALLOCATION")
+                || upper.contains("POLE EMPLOI")
+                || upper.contains("FRANCE TRAVAIL")
+                || upper.contains("CPAM")
+                || upper.contains("CAF ");
+    }
+
+    public static boolean isLogement(String label) {
+        if (label == null || label.isBlank()) return false;
+        String upper = label.toUpperCase(java.util.Locale.ROOT);
+        return upper.contains("LOYER") || upper.contains("CHARGE LOYER");
+    }
+
+    private String stripBankPrefix(String label) {
+        // Préfixes de carte bancaire: "CARTE X1234 12/03 " ou "CARTE 12/03 "
+        String cleaned = label.replaceFirst("^CARTE\\s+(?:X?\\d+\\s+)?\\d{2}/\\d{2}\\s+", "");
+        // Préfixes de virement: "000001 VIR INSTANTANE EMIS LOGITEL POUR: ..."
+        cleaned = cleaned.replaceFirst("^\\d{6}\\s+VIR\\s+(?:INSTANTANE\\s+)?(?:EMIS|RECU)\\s+(?:LOGITEL|WERO)?\\s*(?:POUR:|DE:)?\\s*", "");
+        // Préfixes génériques de virement: "VIR RECU DE: " ou "VIR EMIS POUR: "
+        cleaned = cleaned.replaceFirst("^VIR\\s+(?:EMIS|RECU)\\s*(?:POUR:|DE:)?\\s*", "");
+        return cleaned.trim();
     }
 
     // -------------------------------------------------------------------------
@@ -209,6 +397,7 @@ public class CategoryClassificationService {
 
         // Virements
         prefix(rules, virements,
+                "000001 VIR", "VIR INSTANTANE", "VIR EMIS", "VIR RECU", "VIR SEPA",
                 "ORDRE VIREMENT", "VIREMENT",
                 "PRELEVEMENT SEPA",
                 "TRANSFERT", "ENVOI ARGENT");
@@ -216,6 +405,11 @@ public class CategoryClassificationService {
         // -------------------------------------------------------------------------
         // 3. Règles par MOTS-CLES (score 50) – avec blacklist
         // -------------------------------------------------------------------------
+
+        // Virements
+        keyword(rules, virements,
+                List.of("VIR INSTANTANE", "VIR EMIS", "VIR RECU", "VIREMENT", "VIR LOGITEL", "VIR WERO"),
+                List.of("SALAIRE", "LOYER"));
 
         // Courses : mots-clés génériques mais avec blacklist pour éviter les faux positifs
         keyword(rules, courses,

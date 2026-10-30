@@ -139,7 +139,8 @@ public class ImportPipeline {
                 fingerprint = fingerprintCalculator.forContent(base, rank);
             }
             candidates.add(new ImportCandidate(row.line(), row.bookingDate(), row.valueDate(), row.amountMinor(),
-                    row.currency(), row.label(), row.normalizedLabel(), row.sourceUid(), fingerprint));
+                    row.currency(), row.label(), row.normalizedLabel(), row.sourceUid(), fingerprint,
+                    row.rawCategory(), row.rawSubcategory()));
         }
 
         for (Map.Entry<String, Integer> entry : occurrences.entrySet()) {

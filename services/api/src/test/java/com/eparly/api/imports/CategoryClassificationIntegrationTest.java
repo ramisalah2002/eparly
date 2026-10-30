@@ -232,6 +232,16 @@ class CategoryClassificationIntegrationTest {
                 .get().extracting(Category::getName).isEqualTo("Virements");
         assertThat(classificationService.classify("VIREMENT VERS COMPTE")).isPresent()
                 .get().extracting(Category::getName).isEqualTo("Virements");
+        assertThat(classificationService.classify("000001 VIR INSTANTANE EMIS LOGITEL POUR: Rami BoursoBank 29 10 BQ BOUS CPT 00040826995")).isPresent()
+                .get().extracting(Category::getName).isEqualTo("Virements");
+        assertThat(classificationService.classify("VIR INSTANTANE EMIS WERO POUR: MOHAMMED AMINE S")).isPresent()
+                .get().extracting(Category::getName).isEqualTo("Virements");
+        assertThat(classificationService.classify(
+                "000001 VIR INSTANTANE EMIS LOGITEL POUR: Rami BoursoBank",
+                "000001 VIR INSTANTANE EMIS LOGITEL POUR RAMI BOURSOBANK",
+                "Loisirs",
+                "Restaurants, bars, discothèques"
+        )).isPresent().get().extracting(Category::getName).isEqualTo("Virements");
     }
 
     @Test

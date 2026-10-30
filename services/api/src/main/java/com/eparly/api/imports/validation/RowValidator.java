@@ -32,8 +32,22 @@ public class RowValidator {
             String currency,
             String label,
             String normalizedLabel,
-            String sourceUid
+            String sourceUid,
+            String rawCategory,
+            String rawSubcategory
     ) {
+        public ValidatedRow(
+                int line,
+                LocalDate bookingDate,
+                LocalDate valueDate,
+                long amountMinor,
+                String currency,
+                String label,
+                String normalizedLabel,
+                String sourceUid
+        ) {
+            this(line, bookingDate, valueDate, amountMinor, currency, label, normalizedLabel, sourceUid, null, null);
+        }
     }
 
     public record Result(List<ValidatedRow> rows, List<ImportIssue> issues, int invalidRows) {
@@ -108,9 +122,12 @@ public class RowValidator {
                 }
             }
 
+            String rawCategory = mapping.categoryIndex() >= 0 ? row.valueAt(mapping.categoryIndex()) : null;
+            String rawSubcategory = mapping.subcategoryIndex() >= 0 ? row.valueAt(mapping.subcategoryIndex()) : null;
+
             if (errorCount(issues) == errorsBefore) {
                 valid.add(new ValidatedRow(line, booking, valueDate, amount, currency, label,
-                        LabelNormalizer.normalize(label), sourceUid));
+                        LabelNormalizer.normalize(label), sourceUid, rawCategory, rawSubcategory));
             } else {
                 invalid++;
             }

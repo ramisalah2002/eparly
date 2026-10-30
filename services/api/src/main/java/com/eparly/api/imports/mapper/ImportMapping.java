@@ -15,6 +15,8 @@ public record ImportMapping(
         String creditColumn,
         String currencyColumn,
         String sourceIdColumn,
+        String categoryColumn,
+        String subcategoryColumn,
         String dateFormat,
         AmountFormat amountFormat
 ) {
@@ -28,12 +30,30 @@ public record ImportMapping(
         creditColumn = blankToNull(creditColumn);
         currencyColumn = blankToNull(currencyColumn);
         sourceIdColumn = blankToNull(sourceIdColumn);
+        categoryColumn = blankToNull(categoryColumn);
+        subcategoryColumn = blankToNull(subcategoryColumn);
         dateFormat = blankToNull(dateFormat);
         amountFormat = amountFormat == null ? AmountFormat.AUTO : amountFormat;
     }
 
+    public ImportMapping(
+            String dateColumn,
+            String valueDateColumn,
+            String labelColumn,
+            String amountColumn,
+            String debitColumn,
+            String creditColumn,
+            String currencyColumn,
+            String sourceIdColumn,
+            String dateFormat,
+            AmountFormat amountFormat
+    ) {
+        this(dateColumn, valueDateColumn, labelColumn, amountColumn, debitColumn, creditColumn,
+                currencyColumn, sourceIdColumn, null, null, dateFormat, amountFormat);
+    }
+
     public static ImportMapping empty() {
-        return new ImportMapping(null, null, null, null, null, null, null, null, null, AmountFormat.AUTO);
+        return new ImportMapping(null, null, null, null, null, null, null, null, null, null, null, AmountFormat.AUTO);
     }
 
     public boolean hasSignedAmount() {
@@ -51,7 +71,7 @@ public record ImportMapping(
 
     public ImportMapping withDateFormat(String format) {
         return new ImportMapping(dateColumn, valueDateColumn, labelColumn, amountColumn, debitColumn, creditColumn,
-                currencyColumn, sourceIdColumn, format, amountFormat);
+                currencyColumn, sourceIdColumn, categoryColumn, subcategoryColumn, format, amountFormat);
     }
 
     private static String blankToNull(String value) {

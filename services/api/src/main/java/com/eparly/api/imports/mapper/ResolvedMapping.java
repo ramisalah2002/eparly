@@ -16,14 +16,33 @@ public record ResolvedMapping(
         int creditIndex,
         int currencyIndex,
         int sourceIdIndex,
+        int categoryIndex,
+        int subcategoryIndex,
         String dateFormat,
         AmountFormat amountFormat,
         List<String> headers
 ) {
 
+    public ResolvedMapping(
+            int dateIndex,
+            int valueDateIndex,
+            int labelIndex,
+            int amountIndex,
+            int debitIndex,
+            int creditIndex,
+            int currencyIndex,
+            int sourceIdIndex,
+            String dateFormat,
+            AmountFormat amountFormat,
+            List<String> headers
+    ) {
+        this(dateIndex, valueDateIndex, labelIndex, amountIndex, debitIndex, creditIndex,
+                currencyIndex, sourceIdIndex, -1, -1, dateFormat, amountFormat, headers);
+    }
+
     public ResolvedMapping withDateFormat(String format) {
         return new ResolvedMapping(dateIndex, valueDateIndex, labelIndex, amountIndex, debitIndex, creditIndex,
-                currencyIndex, sourceIdIndex, format, amountFormat, headers);
+                currencyIndex, sourceIdIndex, categoryIndex, subcategoryIndex, format, amountFormat, headers);
     }
 
     public boolean signedAmount() {

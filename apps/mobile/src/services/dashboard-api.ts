@@ -168,8 +168,30 @@ export async function fetchAccounts(): Promise<ApiResponse<AccountItem[]>> {
   }
 }
 
+let cachedCategories: CategoryItem[] | null = null;
+
 /**
- * Fetches recent transactions (paged, size defaults to 5).
+ * Fetches system and user categories (cached in-memory).
+ */
+export async function fetchCategories(): Promise<ApiResponse<CategoryItem[]>> {
+  if (cachedCategories && cachedCategories.length > 0) {
+    return { success: true, data: cachedCategories, status: 200 };
+  }
+  try {
+    const res = await authenticatedFetch('/v1/categories');
+    if (!res.ok) {
+      return { success: false, status: res.status, error: `Erreur (${res.status})` };
+    }
+    const data = (await res.json()) as CategoryItem[];
+    cachedCategories = Array.isArray(data) ? data : [];
+    return { success: true, data: cachedCategories, status: 200 };
+  } catch {
+    return { success: false, error: 'Connexion réseau impossible' };
+  }
+}
+
+/**
+ * Fetches recent transactions (paged, size defaults to 5), with resolved category names.
  */
 export async function fetchRecentTransactions(
   size = 5,
@@ -179,28 +201,28 @@ export async function fetchRecentTransactions(
     const params = new URLSearchParams({ page: '0', size: String(size) });
     if (accountId) params.set('accountId', accountId);
 
-    const res = await authenticatedFetch(`/v1/transactions?${params.toString()}`);
-    if (!res.ok) {
-      return { success: false, status: res.status, error: `Erreur (${res.status})` };
-    }
-    const body = (await res.json()) as { content?: TransactionItem[] };
-    return { success: true, data: Array.isArray(body.content) ? body.content : [], status: 200 };
-  } catch {
-    return { success: false, error: 'Connexion réseau impossible' };
-  }
-}
+    const [txRes, catRes] = await Promise.all([
+      authenticatedFetch(`/v1/transactions?${params.toString()}`),
+      fetchCategories(),
+    ]);
 
-/**
- * Fetches system and user categories.
- */
-export async function fetchCategories(): Promise<ApiResponse<CategoryItem[]>> {
-  try {
-    const res = await authenticatedFetch('/v1/categories');
-    if (!res.ok) {
-      return { success: false, status: res.status, error: `Erreur (${res.status})` };
+    if (!txRes.ok) {
+      return { success: false, status: txRes.status, error: `Erreur (${txRes.status})` };
     }
-    const data = (await res.json()) as CategoryItem[];
-    return { success: true, data: Array.isArray(data) ? data : [], status: 200 };
+    const body = (await txRes.json()) as { content?: TransactionItem[] };
+    const rawList = Array.isArray(body.content) ? body.content : [];
+
+    const categoryMap = new Map<string, string>();
+    if (catRes.success && catRes.data) {
+      catRes.data.forEach((c) => categoryMap.set(c.id, c.name));
+    }
+
+    const data: TransactionItem[] = rawList.map((tx) => ({
+      ...tx,
+      categoryName: tx.categoryId ? categoryMap.get(tx.categoryId) ?? null : null,
+    }));
+
+    return { success: true, data, status: 200 };
   } catch {
     return { success: false, error: 'Connexion réseau impossible' };
   }

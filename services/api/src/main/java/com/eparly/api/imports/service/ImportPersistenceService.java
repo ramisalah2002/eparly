@@ -106,17 +106,20 @@ public class ImportPersistenceService {
      * Ne modifie jamais customCategoryFlag, montant, date, compte ou fingerprint.
      */
     private void classifyNewTransactions(UUID jobId, List<ImportCandidate> candidates) {
-        // Pour chaque candidate, classifier et mettre à jour si une règle s'applique
         for (ImportCandidate candidate : candidates) {
-            Optional<Category> category = classificationService.classify(candidate.normalizedLabel());
+            Optional<Category> category = classificationService.classify(
+                    candidate.rawLabel(),
+                    candidate.normalizedLabel(),
+                    candidate.rawCategory(),
+                    candidate.rawSubcategory()
+            );
             if (category.isPresent()) {
                 // UPDATE uniquement si la transaction n'a pas déjà de catégorie
                 // et si elle appartient bien à ce job (donc nouvellement insérée)
-                int updated = jdbcTemplate.update(
+                jdbcTemplate.update(
                         "UPDATE transactions SET category_id = ? "
                                 + "WHERE import_job_id = ? AND fingerprint = ? AND category_id IS NULL",
                         category.get().getId(), jobId, candidate.fingerprint());
-                // updated == 0 signifie que la transaction n'a pas été insérée (déduplicat)
             }
         }
     }
