@@ -14,6 +14,21 @@ public record ImportCandidate(
         String rawLabel,
         String normalizedLabel,
         String sourceUid,
-        String fingerprint
+        String fingerprint,
+        String rawCategory,
+        String rawSubcategory
 ) {
+    public ImportCandidate(
+            int line,
+            LocalDate bookingDate,
+            LocalDate valueDate,
+            long amountMinor,
+            String currency,
+            String rawLabel,
+            String normalizedLabel,
+            String sourceUid,
+            String fingerprint
+    ) {
+        this(line, bookingDate, valueDate, amountMinor, currency, rawLabel, normalizedLabel, sourceUid, fingerprint, null, null);
+    }
 }

@@ -38,6 +38,10 @@ public class GenericHeaderProfile implements BankProfile {
     private static final List<String> SOURCE_ID = List.of(
             "id transaction", "identifiant transaction", "transaction id", "id operation",
             "identifiant operation", "identifiant unique", "unique id", "uid", "numero operation");
+    private static final List<String> CATEGORY = List.of(
+            "categorie", "category", "cat", "rubrique", "type d operation");
+    private static final List<String> SUBCATEGORY = List.of(
+            "sous categorie", "subcategory", "sous-categorie", "sous rubrique", "sous cat");
 
     @Override
     public Optional<ImportMapping> match(List<String> headers) {
@@ -58,12 +62,14 @@ public class GenericHeaderProfile implements BankProfile {
         }
         String currency = find(headers, CURRENCY, used);
         String sourceId = find(headers, SOURCE_ID, used);
+        String category = find(headers, CATEGORY, used);
+        String subcategory = find(headers, SUBCATEGORY, used);
 
         if (date == null && label == null && amount == null && debit == null) {
             return Optional.empty();
         }
         return Optional.of(new ImportMapping(date, valueDate, label, amount, debit, credit, currency, sourceId,
-                null, null));
+                category, subcategory, null, null));
     }
 
     private static String find(List<String> headers, List<String> synonyms, Set<Integer> used) {

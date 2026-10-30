@@ -63,6 +63,8 @@ public class ColumnMapper {
         int credit = locate(mapping.creditColumn(), "creditColumn", headers, issues, usage, false);
         int currency = locate(mapping.currencyColumn(), "currencyColumn", headers, issues, usage, false);
         int sourceId = locate(mapping.sourceIdColumn(), "sourceIdColumn", headers, issues, usage, false);
+        int category = locate(mapping.categoryColumn(), "categoryColumn", headers, issues, usage, false);
+        int subcategory = locate(mapping.subcategoryColumn(), "subcategoryColumn", headers, issues, usage, false);
 
         boolean signed = mapping.amountColumn() != null;
         boolean split = mapping.debitColumn() != null || mapping.creditColumn() != null;
@@ -87,7 +89,7 @@ public class ColumnMapper {
         }
         AmountFormat amountFormat = mapping.amountFormat() == null ? AmountFormat.AUTO : mapping.amountFormat();
         return new Resolution(new ResolvedMapping(date, valueDate, label, amount, debit, credit, currency, sourceId,
-                dateFormat, amountFormat, List.copyOf(headers)), List.of());
+                category, subcategory, dateFormat, amountFormat, List.copyOf(headers)), List.of());
     }
 
     private int locate(String column, String role, List<String> headers, List<ImportIssue> issues,
