@@ -1,16 +1,17 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   CategoryBreakdown,
   DashboardHeader,
+  DashboardSkeleton,
   FinancialOverviewCard,
   PastelBackground,
   RecentTransactions,
@@ -18,15 +19,32 @@ import {
 } from '@/components/dashboard';
 import { BRAND_COLORS } from '@/constants/colors';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { DASHBOARD_DEMO_DATA } from '@/features/dashboard/demo/dashboard-demo-data';
+import { getAvatarInitials, getUserFirstName } from '@/utils/formatters';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [isBalanceHidden, setIsBalanceHidden] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Single static fixture for all financial demo values
   const demoData = DASHBOARD_DEMO_DATA;
+
+  // Use authenticated user's name/initials if available, falling back to demo values
+  const userName = getUserFirstName(user?.fullName) || demoData.user.name;
+  const userInitials = getAvatarInitials(user?.fullName, user?.email) || demoData.user.initials;
+
+  useEffect(() => {
+    // Show animated skeleton loader on initial mount before revealing the dashboard
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const toggleBalanceVisibility = () => {
     setIsBalanceHidden((prev) => !prev);
@@ -40,11 +58,15 @@ export default function HomeScreen() {
     }, 1000);
   }, []);
 
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   // Bottom padding ensures the last transaction card completely clears the tab bar
   const contentPaddingBottom = Math.max(insets.bottom, 20) + 96;
 
   return (
-    <View style={styles.screenContainer}>
+    <Animated.View style={styles.screenContainer} entering={FadeIn.duration(350)}>
       {/* Full-screen pastel gradient background (positioned behind so it does not affect flex flow) */}
       <PastelBackground style={StyleSheet.absoluteFill} pointerEvents="none" />
 
@@ -52,8 +74,8 @@ export default function HomeScreen() {
       <View style={[styles.fixedHeaderContainer, { paddingTop: insets.top }]}>
         <View style={styles.headerPastelSurface}>
           <DashboardHeader
-            userName={demoData.user.name}
-            userInitials={demoData.user.initials}
+            userName={userName}
+            userInitials={userInitials}
           />
         </View>
         <View style={styles.headerBottomBorder} />
@@ -121,7 +143,7 @@ export default function HomeScreen() {
           </Animated.View>
         </View>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
