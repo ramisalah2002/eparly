@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   primaryCta: {
     backgroundColor: BRAND_COLORS.mutedLavender,
     paddingVertical: 14,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
     borderRadius: 16,
     alignSelf: 'stretch',
     alignItems: 'center',
