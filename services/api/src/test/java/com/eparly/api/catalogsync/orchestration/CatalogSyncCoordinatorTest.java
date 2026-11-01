@@ -4,7 +4,6 @@ import com.eparly.api.catalogsync.CatalogSyncProperties;
 import com.eparly.api.catalogsync.domain.CatalogSourceType;
 import com.eparly.api.catalogsync.domain.CatalogSyncSource;
 import com.eparly.api.catalogsync.discovery.SitemapDiscoveryService;
-import com.eparly.api.catalogsync.extraction.AwinTelcoCsvExtractor;
 import com.eparly.api.catalogsync.extraction.HtmlCatalogOfferExtractor;
 import com.eparly.api.catalogsync.extraction.JsonCatalogOfferExtractor;
 import com.eparly.api.catalogsync.fetch.OfficialSourceHttpClient;
@@ -13,7 +12,6 @@ import com.eparly.api.catalogsync.normalization.OfferNormalizationService;
 import com.eparly.api.catalogsync.persistence.CatalogSyncRepository;
 import com.eparly.api.offer.domain.OfferSector;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -38,7 +36,7 @@ class CatalogSyncCoordinatorTest {
         properties.setMaxExecutionDuration(Duration.ofNanos(1));
         CatalogSyncCoordinator coordinator = new CatalogSyncCoordinator(repository, httpClient, robotsPolicy,
                 mock(SitemapDiscoveryService.class), mock(JsonCatalogOfferExtractor.class),
-                mock(HtmlCatalogOfferExtractor.class), mock(AwinTelcoCsvExtractor.class),
+                mock(HtmlCatalogOfferExtractor.class),
                 mock(OfferNormalizationService.class), properties, Clock.systemUTC());
         CatalogSyncSource source = new CatalogSyncSource(UUID.randomUUID(), null, "Fixture", "example.com",
                 "https://example.com/offers", CatalogSourceType.JSON_FEED, OfferSector.STREAMING,
@@ -55,23 +53,20 @@ class CatalogSyncCoordinatorTest {
     }
 
     @Test
-    void csvFeedSourceIsExtractedUsingAwinTelcoCsvExtractor() {
+    void csvFeedSourceIsProcessedWithoutAutomaticExtraction() {
         CatalogSyncRepository repository = mock(CatalogSyncRepository.class);
         OfficialSourceHttpClient httpClient = mock(OfficialSourceHttpClient.class);
         RobotsPolicyService robotsPolicy = mock(RobotsPolicyService.class);
         CatalogSyncProperties properties = new CatalogSyncProperties();
         properties.setMaxExecutionDuration(Duration.ofSeconds(60));
         
-        ObjectMapper objectMapper = new ObjectMapper();
-        AwinTelcoCsvExtractor awinTelcoCsvExtractor = new AwinTelcoCsvExtractor(objectMapper);
-        
         CatalogSyncCoordinator coordinator = new CatalogSyncCoordinator(repository, httpClient, robotsPolicy,
                 mock(SitemapDiscoveryService.class), mock(JsonCatalogOfferExtractor.class),
-                mock(HtmlCatalogOfferExtractor.class), awinTelcoCsvExtractor,
+                mock(HtmlCatalogOfferExtractor.class),
                 mock(OfferNormalizationService.class), properties, Clock.systemUTC());
         
-        CatalogSyncSource source = new CatalogSyncSource(UUID.randomUUID(), null, "Awin Telco", "merchant.example.fr",
-                "https://feed.awin.com/telco", CatalogSourceType.CSV_FEED, OfferSector.MOBILE_PLAN,
+        CatalogSyncSource source = new CatalogSyncSource(UUID.randomUUID(), null, "CSV source", "merchant.example.fr",
+                "https://feed.example.com/telco", CatalogSourceType.CSV_FEED, OfferSector.MOBILE_PLAN,
                 true, "AUTHORIZED", null, null, "{}");
         
         var sourceErrors = new LinkedHashMap<String, String>();
@@ -94,12 +89,9 @@ class CatalogSyncCoordinatorTest {
         CatalogSyncProperties properties = new CatalogSyncProperties();
         properties.setMaxExecutionDuration(Duration.ofSeconds(60));
         
-        ObjectMapper objectMapper = new ObjectMapper();
-        AwinTelcoCsvExtractor awinTelcoCsvExtractor = new AwinTelcoCsvExtractor(objectMapper);
-        
         CatalogSyncCoordinator coordinator = new CatalogSyncCoordinator(repository, httpClient, robotsPolicy,
                 mock(SitemapDiscoveryService.class), mock(JsonCatalogOfferExtractor.class),
-                mock(HtmlCatalogOfferExtractor.class), awinTelcoCsvExtractor,
+                mock(HtmlCatalogOfferExtractor.class),
                 mock(OfferNormalizationService.class), properties, Clock.systemUTC());
         
         CatalogSyncSource source = new CatalogSyncSource(UUID.randomUUID(), null, "Test CSV", "example.fr",
@@ -112,6 +104,6 @@ class CatalogSyncCoordinatorTest {
         
         assertThat(counters.errorsCount).isEqualTo(1);
         assertThat(sourceErrors).containsKey(source.id().toString());
-        assertThat(sourceErrors.get(source.id().toString())).contains("CSV_FEED is only supported for MOBILE_PLAN sector");
+        assertThat(sourceErrors.get(source.id().toString())).contains("CSV_FEED automatic collection is disabled for V1");
     }
 }

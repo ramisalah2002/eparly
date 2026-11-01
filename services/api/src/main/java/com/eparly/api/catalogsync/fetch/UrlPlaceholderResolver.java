@@ -7,13 +7,13 @@ import java.util.regex.Pattern;
  * Resolves placeholders in URLs with values from environment variables.
  * 
  * This ensures that sensitive credentials (like API keys) are never stored in the database
- * or logged. Instead, URLs can contain placeholders like {awin_api_key} which are replaced
+ * or logged. Instead, URLs can contain placeholders like {provider_api_key} which are replaced
  * at runtime with values from environment variables.
  * 
  * Placeholder convention:
  * - Placeholders use lowercase with underscores: {provider_api_key}
  * - They are converted to uppercase for environment variable lookup: PROVIDER_API_KEY
- * - Example: {awin_api_key} -> AWIN_API_KEY environment variable
+ * - Example: {provider_api_key} -> PROVIDER_API_KEY environment variable
  * 
  * Security considerations:
  * - Placeholder values (credentials) are never logged or included in error messages

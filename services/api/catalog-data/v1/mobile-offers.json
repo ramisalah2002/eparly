@@ -1,0 +1,126 @@
+{
+  "version": "1",
+  "offers": [
+    {
+      "providerKey": "free-mobile",
+      "commercialName": "Forfait Free Max",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": true,
+        "roaming": true
+      },
+      "eligibilityConditions": "Sans engagement. Tarif standard hors avantage Freebox.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 2999,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Tarif officiel consulté manuellement"
+      },
+      "evidence": {
+        "officialUrl": "https://mobile.free.fr/",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Free Mobile",
+        "provenance": "Consultation manuelle de la page d'accueil mobile Free",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    },
+    {
+      "providerKey": "free-mobile",
+      "commercialName": "Forfait Free 5G+",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "dataGb": 350,
+        "network5G": true,
+        "roaming": true
+      },
+      "eligibilityConditions": "Sans engagement. Tarif standard hors avantage Freebox.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 1999,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Tarif officiel consulté manuellement"
+      },
+      "evidence": {
+        "officialUrl": "https://mobile.free.fr/",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Free Mobile",
+        "provenance": "Consultation manuelle de la page d'accueil mobile Free",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    },
+    {
+      "providerKey": "free-mobile",
+      "commercialName": "Serie Free",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "dataGb": 110,
+        "network5G": true,
+        "roaming": true
+      },
+      "eligibilityConditions": "Sans engagement. Promotion 12,99 EUR/mois pendant 1 an puis bascule au Forfait Free 5G+.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 1999,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "promotionPriceType": "FIXED_PRICE",
+        "promotionDurationMonths": 12,
+        "priceAfterPromotionMinor": 1299,
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Tarif standard après promotion, promotion 12 mois à 12,99 EUR"
+      },
+      "evidence": {
+        "officialUrl": "https://mobile.free.fr/",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Free Mobile",
+        "provenance": "Consultation manuelle de la page d'accueil mobile Free",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    },
+    {
+      "providerKey": "free-mobile",
+      "commercialName": "Forfait 2 euros",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": false,
+        "roaming": false
+      },
+      "eligibilityConditions": "Sans engagement. 2h d'appels, SMS/MMS illimites. Details data non verifies.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 200,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Tarif officiel consulté manuellement"
+      },
+      "evidence": {
+        "officialUrl": "https://mobile.free.fr/",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Free Mobile",
+        "provenance": "Consultation manuelle de la page d'accueil mobile Free",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    }
+  ]
+}

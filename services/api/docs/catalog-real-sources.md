@@ -1,5 +1,9 @@
 # Évaluation des sources commerciales réelles
 
+> Note V1 (étape 12C.6) : l'intégration Awin et les collecteurs automatiques sont
+> abandonnés/reportés pour la V1. Ce document est conservé à titre historique et
+> d'évaluation ; il ne constitue pas une dépendance ni un prérequis de la V1.
+
 ## Décision au 29 octobre 2026
 
 Aucune source n'est approuvée ni activée pour une collecte Eparly. Les pages

@@ -5,8 +5,6 @@ import com.eparly.api.catalogsync.discovery.SitemapDiscoveryService;
 import com.eparly.api.catalogsync.domain.CatalogObservationStatus;
 import com.eparly.api.catalogsync.domain.CatalogSourceType;
 import com.eparly.api.catalogsync.domain.CatalogSyncSource;
-import com.eparly.api.offer.domain.OfferSector;
-import com.eparly.api.catalogsync.extraction.AwinTelcoCsvExtractor;
 import com.eparly.api.catalogsync.extraction.HtmlCatalogOfferExtractor;
 import com.eparly.api.catalogsync.extraction.JsonCatalogOfferExtractor;
 import com.eparly.api.catalogsync.extraction.RawCatalogOffer;
@@ -40,7 +38,6 @@ public class CatalogSyncCoordinator {
     private final SitemapDiscoveryService sitemapDiscovery;
     private final JsonCatalogOfferExtractor jsonExtractor;
     private final HtmlCatalogOfferExtractor htmlExtractor;
-    private final AwinTelcoCsvExtractor awinTelcoCsvExtractor;
     private final OfferNormalizationService normalization;
     private final CatalogSyncProperties properties;
     private final Clock clock;
@@ -50,7 +47,6 @@ public class CatalogSyncCoordinator {
                                   RobotsPolicyService robotsPolicy, SitemapDiscoveryService sitemapDiscovery,
                                   JsonCatalogOfferExtractor jsonExtractor,
                                   HtmlCatalogOfferExtractor htmlExtractor,
-                                  AwinTelcoCsvExtractor awinTelcoCsvExtractor,
                                   OfferNormalizationService normalization,
                                   CatalogSyncProperties properties, Clock clock) {
         this.repository = repository;
@@ -59,7 +55,6 @@ public class CatalogSyncCoordinator {
         this.sitemapDiscovery = sitemapDiscovery;
         this.jsonExtractor = jsonExtractor;
         this.htmlExtractor = htmlExtractor;
-        this.awinTelcoCsvExtractor = awinTelcoCsvExtractor;
         this.normalization = normalization;
         this.properties = properties;
         this.clock = clock;
@@ -202,10 +197,8 @@ public class CatalogSyncCoordinator {
     }
 
     private List<RawCatalogOffer> extractCsvFeed(CatalogSyncSource source, String body) {
-        if (source.sector() == OfferSector.MOBILE_PLAN) {
-            return awinTelcoCsvExtractor.extract(body, source.sector());
-        }
-        throw new IllegalArgumentException("CSV_FEED is only supported for MOBILE_PLAN sector with Awin Telco format");
+        throw new UnsupportedOperationException(
+                "CSV_FEED automatic collection is disabled for V1; manual catalog import is used instead");
     }
 
     private List<RawCatalogOffer> extractPage(CatalogSyncSource source, String body, String finalUrl) {

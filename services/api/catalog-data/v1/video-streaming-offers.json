@@ -1,0 +1,131 @@
+{
+  "version": "1",
+  "offers": [
+    {
+      "providerKey": "netflix",
+      "commercialName": "Netflix - offre avec publicite",
+      "sector": "STREAMING",
+      "territory": "FR",
+      "characteristics": {
+        "ads": true
+      },
+      "eligibilityConditions": "Offre avec publicite. Tarif a partir de 7,99 EUR/mois selon la page officielle.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 799,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Tarif officiel consulte manuellement"
+      },
+      "evidence": {
+        "officialUrl": "https://www.netflix.com/fr/",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Netflix",
+        "provenance": "Consultation manuelle de la page d'accueil Netflix France",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    },
+    {
+      "providerKey": "disney-plus",
+      "commercialName": "Disney+ Standard avec publicite",
+      "sector": "STREAMING",
+      "territory": "FR",
+      "characteristics": {
+        "ads": true,
+        "screens": 2,
+        "videoQuality": "HD",
+        "offlineDownload": true
+      },
+      "eligibilityConditions": "Offre avec publicite. Promotion 5,99 EUR/mois pendant 6 mois puis 6,99 EUR/mois.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 699,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "promotionPriceType": "FIXED_PRICE",
+        "promotionDurationMonths": 6,
+        "priceAfterPromotionMinor": 599,
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Tarif standard apres promotion"
+      },
+      "evidence": {
+        "officialUrl": "https://www.disneyplus.com/fr-fr",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Disney+",
+        "provenance": "Consultation manuelle de la page d'accueil Disney+ France",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    },
+    {
+      "providerKey": "disney-plus",
+      "commercialName": "Disney+ Standard",
+      "sector": "STREAMING",
+      "territory": "FR",
+      "characteristics": {
+        "ads": false,
+        "screens": 2,
+        "videoQuality": "HD",
+        "offlineDownload": true
+      },
+      "eligibilityConditions": "Offre sans publicite. Promotion 8,99 EUR/mois pendant 6 mois puis 10,99 EUR/mois.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 1099,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "promotionPriceType": "FIXED_PRICE",
+        "promotionDurationMonths": 6,
+        "priceAfterPromotionMinor": 899,
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Tarif standard apres promotion"
+      },
+      "evidence": {
+        "officialUrl": "https://www.disneyplus.com/fr-fr",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Disney+",
+        "provenance": "Consultation manuelle de la page d'accueil Disney+ France",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    },
+    {
+      "providerKey": "disney-plus",
+      "commercialName": "Disney+ Premium",
+      "sector": "STREAMING",
+      "territory": "FR",
+      "characteristics": {
+        "ads": false,
+        "screens": 4,
+        "videoQuality": "4K",
+        "offlineDownload": true
+      },
+      "eligibilityConditions": "Offre sans publicite. Promotion 11,99 EUR/mois pendant 6 mois puis 15,99 EUR/mois.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 1599,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "promotionPriceType": "FIXED_PRICE",
+        "promotionDurationMonths": 6,
+        "priceAfterPromotionMinor": 1199,
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Tarif standard apres promotion"
+      },
+      "evidence": {
+        "officialUrl": "https://www.disneyplus.com/fr-fr",
+        "consultedAt": "2026-11-01T00:00:00Z",
+        "nature": "Page officielle Disney+",
+        "provenance": "Consultation manuelle de la page d'accueil Disney+ France",
+        "expiresAt": null,
+        "evidenceScope": "OFFER"
+      }
+    }
+  ]
+}

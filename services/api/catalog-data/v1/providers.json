@@ -1,0 +1,26 @@
+{
+  "version": "1",
+  "providers": [
+    {
+      "key": "free-mobile",
+      "name": "Free Mobile",
+      "sector": "MOBILE_PLAN",
+      "officialWebsite": "https://mobile.free.fr",
+      "country": "FR"
+    },
+    {
+      "key": "netflix",
+      "name": "Netflix",
+      "sector": "STREAMING",
+      "officialWebsite": "https://www.netflix.com",
+      "country": "FR"
+    },
+    {
+      "key": "disney-plus",
+      "name": "Disney+",
+      "sector": "STREAMING",
+      "officialWebsite": "https://www.disneyplus.com",
+      "country": "FR"
+    }
+  ]
+}

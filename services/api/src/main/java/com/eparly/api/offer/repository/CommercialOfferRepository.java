@@ -29,5 +29,7 @@ public interface CommercialOfferRepository extends JpaRepository<CommercialOffer
 
     boolean existsByCommercialNameAndProviderId(String commercialName, UUID providerId);
 
+    java.util.Optional<CommercialOffer> findByCommercialNameAndProviderId(String commercialName, UUID providerId);
+
     boolean existsByProviderId(UUID providerId);
 }
