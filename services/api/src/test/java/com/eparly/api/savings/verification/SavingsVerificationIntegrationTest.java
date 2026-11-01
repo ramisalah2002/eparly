@@ -289,7 +289,7 @@ class SavingsVerificationIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 2),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -719,7 +719,7 @@ class SavingsVerificationIntegrationTest {
                     "offerId", offer.getId(),
                     "sector", "STREAMING",
                     "horizonMonths", 12,
-                    "requirements", Map.of(),
+                    "requirements", Map.of("minScreens", 2),
                     "userKnownCancellationFeeMinor", 0L,
                     "userKnownOtherFeesMinor", 0L
             );

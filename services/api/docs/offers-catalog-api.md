@@ -8,7 +8,7 @@ Le module `com.eparly.api.offer` constitue un catalogue structuré d'offres comm
 Il sert de base à l'étape 10B (moteur de comparaison). Aucun prix n'est inventé ; toute offre publiée
 doit être reliée à une source officielle vérifiée.
 
-## Entités et schéma PostgreSQL (Migration V12)
+## Entités et schéma PostgreSQL (Migrations V12-V18)
 
 ### offer_providers
 Fournisseur de service commercial.
@@ -47,6 +47,10 @@ Tarification d'une offre (montants en centimes).
 - promotion_percent INTEGER (0-100)
 - promotion_duration_months INTEGER
 - price_after_promotion_minor BIGINT
+- promotion_price_type VARCHAR(20) (PERCENTAGE, FIXED_PRICE)
+- promotion_valid_from DATE
+- promotion_valid_until DATE
+- version BIGINT (versionnement optimiste)
 - discount_conditions VARCHAR(500)
 - taxes_included BOOLEAN DEFAULT TRUE
 - data_unknown BOOLEAN DEFAULT FALSE
@@ -59,6 +63,7 @@ Preuve / source officielle vérifiée.
 - official_url VARCHAR(1000) CHECK (^https://.+)
 - consulted_at TIMESTAMPTZ
 - verified_at TIMESTAMPTZ
+- evidence_scope VARCHAR(20) (OFFER, PRICING, PROMOTION; NULL pour les preuves historiques générales)
 - nature VARCHAR(200)
 - verified_summary VARCHAR(2000)
 - expires_at TIMESTAMPTZ
@@ -72,6 +77,8 @@ Historique des révisions tarifaires (traçabilité).
 - offer_id UUID FK -> commercial_offers
 - old_amount_minor BIGINT
 - new_amount_minor BIGINT
+- old_pricing_snapshot JSONB
+- new_pricing_snapshot JSONB
 - changed_at TIMESTAMPTZ
 - reason VARCHAR(500)
 
@@ -83,29 +90,36 @@ Historique des révisions tarifaires (traçabilité).
 
 ## Représentation des prix et promotions
 
-- Les montants sont en centimes (Long). Ex: 15,99 EUR = 1599.
-- `amount_minor` = prix normal récurrent.
-- `price_after_promotion_minor` = prix après promotion, distinct du prix normal.
-- `promotion_percent` + `promotion_duration_months` = description de la promotion.
-- Une absence de frais documentés ne signifie pas automatiquement des frais nuls.
-- Les prix annuels et mensuels restent distinguables via `billing_period`.
-- `data_unknown = true` indique une donnée manquante (jamais substituée par zéro).
+Les règles canoniques sont définies dans [offer-pricing-policy.md](offer-pricing-policy.md).
+`amount_minor` est le tarif standard récurrent, également appliqué après la promotion.
+Une promotion est soit un pourcentage (`promotion_price_type=PERCENTAGE`), soit un prix
+fixe (`FIXED_PRICE` via `price_after_promotion_minor`), jamais les deux. Ce dernier
+champ est le tarif temporaire fixe par cycle, malgré son nom historique.
+`promotion_duration_months` décrit la durée après souscription ; les dates
+`promotion_valid_from`/`promotion_valid_until` décrivent la fenêtre de souscription.
+Les promotions historiques sans type restent ambiguës et ne sont pas appliquées.
+Montants en unités mineures ; null signifie inconnu et zéro signifie explicitement
+gratuit. Une absence de frais documentés n'est pas assimilée à zéro.
 
 ## Sources et règles de vérification
 
 Chaque offre publiée (VERIFIED) doit disposer :
-- D'au moins une `OfferEvidence` avec `verification_status = VERIFIED`.
+- D'une preuve d'offre `OFFER` vérifiée (ou d'une preuve historique à scope null).
 - D'une URL officielle HTTPS validée.
 - D'une tarification fiable (`amount_minor >= 0`, `billing_period` connu).
 - D'une période de validité future ou indéterminée.
 
 Une simple URL ne prouve pas automatiquement l'exactitude du prix.
+La preuve `PRICING` seule ne confirme pas les caractéristiques de l'offre.
+Une promotion exige une preuve séparée `PROMOTION` fraîche de moins de sept jours ;
+elle ne peut pas remplacer la preuve d'offre. Les tarifs promotionnels non vérifiés
+sont masqués et signalés par `promotionVerified=false`.
 
 ## Cycle de vie des offres
 
 - **DRAFT** : fiche en préparation (état par défaut à la création).
 - **VERIFIED** : informations vérifiées et publiables. Requiert tarification + source vérifiée.
-- **STALE** : vérification trop ancienne (seuil configurable, défaut 30 jours ; 7 jours pour les promotions).
+- **STALE** : vérification de l'offre trop ancienne (seuil configurable, défaut 30 jours). Une promotion périmée est désactivée sans invalider le tarif standard.
 - **EXPIRED** : offre dont `valid_until` est dépassée.
 - **ARCHIVED** : offre retirée du catalogue actif (conservée pour traçabilité).
 
@@ -155,7 +169,7 @@ Fournisseurs actifs, optionnellement filtrés par secteur.
 Tous les endpoints sont documentés via SpringDoc (Swagger/OpenAPI) avec `@Operation`, `@ApiResponse`, `@SecurityRequirement`.
 Disponible sur `/v3/api-docs` et `/swagger-ui.html` (profils local/test uniquement).
 
-## Exemples JSON fictifs
+## Exemples JSON fictifs (noms et montants illustratifs, pas des offres réelles)
 
 ### Offre streaming (VERIFIED)
 ```json
@@ -181,15 +195,14 @@ Disponible sur `/v3/api-docs` et `/swagger-ui.html` (profils local/test uniqueme
     "currency": "EUR",
     "billingPeriod": "MONTHLY",
     "activationFeeMinor": 0,
-    "promotionPercent": 20,
-    "promotionDurationMonths": 3,
-    "priceAfterPromotionMinor": 799,
+    "promotionVerified": false,
     "taxesIncluded": true
   },
   "evidence": [
     {
       "officialUrl": "https://example-stream.com/offers/start",
       "verifiedAt": "2026-10-28T10:00:00Z",
+      "evidenceScope": "OFFER",
       "nature": "Prix officiel",
       "verificationStatus": "VERIFIED"
     }

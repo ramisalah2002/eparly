@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -38,13 +39,29 @@ public class OfferEvidence {
     @Column(name = "official_url", nullable = false, length = 1000)
     private String officialUrl;
 
-    @NotNull
-    @Column(name = "consulted_at", nullable = false)
+    @Column(name = "consulted_at")
     private Instant consultedAt;
 
-    @NotNull
-    @Column(name = "verified_at", nullable = false)
+    @Column(name = "verified_at")
     private Instant verifiedAt;
+
+    @Column(name = "verified_by_user_id")
+    private UUID verifiedByUserId;
+
+    @Column(name = "verified_pricing_version")
+    private Long verifiedPricingVersion;
+
+    @Column(name = "verified_provider_version")
+    private Long verifiedProviderVersion;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "evidence_scope", length = 20)
+    // Null remains the legacy whole-offer scope; new evidence should state its scope.
+    private OfferEvidenceScope evidenceScope;
 
     @NotBlank
     @Size(max = 200)
@@ -82,8 +99,6 @@ public class OfferEvidence {
         Instant now = Instant.now();
         if (this.createdAt == null) this.createdAt = now;
         if (this.updatedAt == null) this.updatedAt = now;
-        if (this.consultedAt == null) this.consultedAt = now;
-        if (this.verifiedAt == null) this.verifiedAt = now;
     }
 
     @PreUpdate
@@ -105,6 +120,20 @@ public class OfferEvidence {
 
     public Instant getVerifiedAt() { return verifiedAt; }
     public void setVerifiedAt(Instant verifiedAt) { this.verifiedAt = verifiedAt; }
+    public UUID getVerifiedByUserId() { return verifiedByUserId; }
+    public void setVerifiedByUserId(UUID verifiedByUserId) { this.verifiedByUserId = verifiedByUserId; }
+    public Long getVerifiedPricingVersion() { return verifiedPricingVersion; }
+    public void setVerifiedPricingVersion(Long verifiedPricingVersion) {
+        this.verifiedPricingVersion = verifiedPricingVersion;
+    }
+    public Long getVerifiedProviderVersion() { return verifiedProviderVersion; }
+    public void setVerifiedProviderVersion(Long verifiedProviderVersion) {
+        this.verifiedProviderVersion = verifiedProviderVersion;
+    }
+    public Long getVersion() { return version; }
+
+    public OfferEvidenceScope getEvidenceScope() { return evidenceScope; }
+    public void setEvidenceScope(OfferEvidenceScope evidenceScope) { this.evidenceScope = evidenceScope; }
 
     public String getNature() { return nature; }
     public void setNature(String nature) { this.nature = nature; }

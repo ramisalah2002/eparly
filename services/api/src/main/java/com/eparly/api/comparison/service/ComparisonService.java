@@ -2,7 +2,6 @@ package com.eparly.api.comparison.service;
 
 import com.eparly.api.auth.exception.ApiException;
 import com.eparly.api.auth.service.JwtUserId;
-import com.eparly.api.comparison.domain.ComparisonStatus;
 import com.eparly.api.offer.domain.OfferSector;
 import com.eparly.api.comparison.dto.ComparisonCriterionDetail;
 import com.eparly.api.comparison.dto.ComparisonMetadataResponse;
@@ -11,11 +10,9 @@ import com.eparly.api.comparison.dto.ComparisonRequest;
 import com.eparly.api.comparison.dto.ComparisonResponse;
 import com.eparly.api.comparison.strategy.ComparisonStrategy;
 import com.eparly.api.offer.domain.CommercialOffer;
-import com.eparly.api.offer.domain.OfferEvidence;
-import com.eparly.api.offer.domain.OfferPricing;
 import com.eparly.api.offer.repository.CommercialOfferRepository;
-import com.eparly.api.offer.repository.OfferEvidenceRepository;
-import com.eparly.api.offer.repository.OfferPricingRepository;
+import com.eparly.api.offer.service.OfferAvailabilityService;
+import com.eparly.api.savings.service.PromotionCalculationService;
 import com.eparly.api.subscription.domain.Subscription;
 import com.eparly.api.subscription.repository.SubscriptionRepository;
 import org.springframework.http.HttpStatus;
@@ -28,7 +25,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -37,25 +33,25 @@ public class ComparisonService {
 
     private final SubscriptionRepository subscriptionRepository;
     private final CommercialOfferRepository offerRepository;
-    private final OfferPricingRepository pricingRepository;
-    private final OfferEvidenceRepository evidenceRepository;
     private final OfferEligibilityService eligibilityService;
     private final ComparisonCriteriaValidator validator;
+    private final OfferAvailabilityService availabilityService;
+    private final PromotionCalculationService promotionService;
     private final List<ComparisonStrategy> strategies;
 
     public ComparisonService(SubscriptionRepository subscriptionRepository,
                              CommercialOfferRepository offerRepository,
-                             OfferPricingRepository pricingRepository,
-                             OfferEvidenceRepository evidenceRepository,
                              OfferEligibilityService eligibilityService,
                              ComparisonCriteriaValidator validator,
+                             OfferAvailabilityService availabilityService,
+                             PromotionCalculationService promotionService,
                              List<ComparisonStrategy> strategies) {
         this.subscriptionRepository = subscriptionRepository;
         this.offerRepository = offerRepository;
-        this.pricingRepository = pricingRepository;
-        this.evidenceRepository = evidenceRepository;
         this.eligibilityService = eligibilityService;
         this.validator = validator;
+        this.availabilityService = availabilityService;
+        this.promotionService = promotionService;
         this.strategies = strategies;
     }
 
@@ -73,27 +69,31 @@ public class ComparisonService {
         Subscription subscription = subscriptionRepository.findByIdAndUserId(request.subscriptionId(), userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Abonnement introuvable"));
 
-        // Valider les critères selon le secteur
-        ComparisonStrategy strategy = findStrategy(request.sector());
-        validator.validate(request, request.sector());
+        ComparisonStrategy strategy = validateRequest(request);
 
         // Récupérer les offres publiquement consultables pour ce secteur
-        LocalDate now = LocalDate.now();
-        List<CommercialOffer> allOffers = offerRepository.findByPublicationStatus(
-                com.eparly.api.offer.domain.OfferStatus.VERIFIED);
+        List<CommercialOffer> allOffers = offerRepository.findAll(
+                availabilityService.currentlyAvailable(request.sector(), null, "FR"));
 
         List<ComparisonOfferResult> results = new ArrayList<>();
         int totalEligible = 0;
 
         for (CommercialOffer offer : allOffers) {
-            if (!offer.getSector().equals(request.sector())) continue;
-            if (!eligibilityService.isEligible(offer, "FR", now)) continue;
+            OfferAvailabilityService.AvailabilityResult availability =
+                    eligibilityService.evaluate(offer, "FR");
+            if (!availability.available()) continue;
             totalEligible++;
 
-            OfferPricing pricing = pricingRepository.findByOfferId(offer.getId()).orElse(null);
-            List<OfferEvidence> evidence = evidenceRepository.findAllByOfferIdOrderByVerifiedAtDesc(offer.getId());
-
-            ComparisonOfferResult result = strategy.evaluateOffer(request, offer, pricing, evidence);
+            List<com.eparly.api.offer.domain.OfferEvidence> evidence =
+                    new ArrayList<>(List.of(availability.evidence()));
+            availabilityService.currentPromotionEvidence(offer).ifPresent(promotionEvidence -> {
+                if (promotionService.isPromotionApplicable(
+                        availability.pricing(), offer, availabilityService.currentDate(), promotionEvidence)) {
+                    evidence.add(promotionEvidence);
+                }
+            });
+            ComparisonOfferResult result = strategy.evaluateOffer(
+                    request, offer, availability.pricing(), evidence);
             results.add(result);
         }
 
@@ -125,6 +125,16 @@ public class ComparisonService {
         );
     }
 
+    public ComparisonStrategy validateRequest(ComparisonRequest request) {
+        if (request == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Requête de comparaison invalide");
+        }
+        validator.validate(request, request.sector());
+        ComparisonStrategy strategy = findStrategy(request.sector());
+        validator.validate(request, request.sector(), strategy);
+        return strategy;
+    }
+
     /**
      * Retourne les critères disponibles pour un secteur.
      */
@@ -147,7 +157,9 @@ public class ComparisonService {
                 "Comparaison déterministe des caractéristiques déclarées vs besoins utilisateur",
                 "Offres vérifiées manuellement, publiquement consultables",
                 "Score heuristique décroissant (pas une probabilité)",
-                "Vérification de moins de 30 jours (7 jours pour les promotions)",
+                "Vérification de moins de " + availabilityService.freshnessThresholdDays()
+                        + " jours. Une promotion exige une preuve dédiée de moins de "
+                        + availabilityService.promotionFreshnessThresholdDays() + " jours.",
                 "Le catalogue n'est pas exhaustif. Il référence uniquement les offres vérifiées.",
                 "Aucune rémunération d'affiliation n'influence le classement."
         );

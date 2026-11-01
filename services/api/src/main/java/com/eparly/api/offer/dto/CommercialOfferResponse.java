@@ -25,6 +25,7 @@ public record CommercialOfferResponse(
         OfferPricingResponse pricing,
         List<OfferEvidenceResponse> evidence,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Long version
 ) {
 }

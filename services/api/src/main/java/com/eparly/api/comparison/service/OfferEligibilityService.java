@@ -1,30 +1,17 @@
 package com.eparly.api.comparison.service;
 
-import com.eparly.api.comparison.config.ComparisonProperties;
 import com.eparly.api.offer.domain.CommercialOffer;
-import com.eparly.api.offer.domain.EvidenceStatus;
-import com.eparly.api.offer.domain.OfferStatus;
-import com.eparly.api.offer.repository.OfferEvidenceRepository;
-import com.eparly.api.offer.repository.OfferPricingRepository;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 
 @Service
 public class OfferEligibilityService {
 
-    private final OfferEvidenceRepository evidenceRepository;
-    private final OfferPricingRepository pricingRepository;
-    private final ComparisonProperties properties;
+    private final com.eparly.api.offer.service.OfferAvailabilityService availabilityService;
 
-    public OfferEligibilityService(OfferEvidenceRepository evidenceRepository,
-                                   OfferPricingRepository pricingRepository,
-                                   ComparisonProperties properties) {
-        this.evidenceRepository = evidenceRepository;
-        this.pricingRepository = pricingRepository;
-        this.properties = properties;
+    public OfferEligibilityService(com.eparly.api.offer.service.OfferAvailabilityService availabilityService) {
+        this.availabilityService = availabilityService;
     }
 
     /**
@@ -33,25 +20,11 @@ public class OfferEligibilityService {
      * et posseder une evidence verifiee recente.
      */
     public boolean isEligible(CommercialOffer offer, String territory, LocalDate now) {
-        if (offer == null) return false;
-        if (offer.getPublicationStatus() != OfferStatus.VERIFIED) return false;
-        if (offer.getValidUntil() != null && !offer.getValidUntil().isAfter(now)) return false;
-        if (!territory.equalsIgnoreCase(offer.getTerritory())) return false;
+        return evaluate(offer, territory).available();
+    }
 
-        // Verifier qu'il existe au moins une evidence verifiee recente
-        List<com.eparly.api.offer.domain.OfferEvidence> evidenceList =
-                evidenceRepository.findAllByOfferIdOrderByVerifiedAtDesc(offer.getId());
-        if (evidenceList.isEmpty()) return false;
-
-        com.eparly.api.offer.domain.OfferEvidence latest = evidenceList.get(0);
-        if (latest.getVerificationStatus() != EvidenceStatus.VERIFIED) return false;
-
-        Instant freshnessThreshold = Instant.now().minus(properties.getFreshnessThreshold());
-        if (latest.getVerifiedAt() != null && latest.getVerifiedAt().isBefore(freshnessThreshold)) {
-            return false;
-        }
-
-        // Verifier que le pricing existe et est fiable
-        return pricingRepository.findByOfferId(offer.getId()).isPresent();
+    public com.eparly.api.offer.service.OfferAvailabilityService.AvailabilityResult evaluate(
+            CommercialOffer offer, String territory) {
+        return availabilityService.evaluate(offer, territory);
     }
 }

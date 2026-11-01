@@ -71,7 +71,8 @@ public class SavingsController {
                 "Prix promotionnel appliqué pendant la durée de la promotion, puis prix normal. Une promotion n'est jamais appliquée indéfiniment.",
                 "Les frais inconnus ne sont jamais substitués par zéro. Leur absence rend le statut INSUFFICIENT_DATA.",
                 "Montant déclaré (utilisateur) > montant observé (transactions) > inconnu. Les prix proviennent du catalogue vérifié (étape 10A).",
-                "Vérification de moins de 30 jours (7 jours pour les promotions). Offres DRAFT, STALE, EXPIRED, ARCHIVED exclues.",
+                "Les offres doivent être actuellement disponibles selon la politique du catalogue. "
+                        + "La fraîcheur des promotions sera traitée en 12C.2B.",
                 "Estimation déterministe, non garantie. Ne constitue pas une promesse d'économie. Le catalogue n'est pas exhaustif.",
                 "Aucune rémunération d'affiliation n'influence le montant des économies affichées."
         );

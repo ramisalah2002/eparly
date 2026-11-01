@@ -40,9 +40,9 @@ public record SavingsEstimateResponse(
         @Schema(description = "Coût alternatif annuel (centimes)") Long alternativeAnnualCostMinor,
 
         // Promotion
-        @Schema(description = "Prix promotionnel utilisé (centimes)") Long promotionPriceMinor,
+        @Schema(description = "Prix promotionnel effectivement appliqué, en unités mineures par cycle; null si non vérifié") Long promotionPriceMinor,
         @Schema(description = "Durée de la promotion en mois") Integer promotionDurationMonths,
-        @Schema(description = "Prix après promotion (centimes)") Long priceAfterPromotionMinor,
+        @Schema(description = "Prix standard appliqué après promotion, en unités mineures par cycle") Long priceAfterPromotionMinor,
 
         // Frais de changement
         @Schema(description = "Frais de résiliation (centimes)") Long cancellationFeeMinor,

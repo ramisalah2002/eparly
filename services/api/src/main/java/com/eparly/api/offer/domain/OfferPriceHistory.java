@@ -10,8 +10,11 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -32,6 +35,14 @@ public class OfferPriceHistory {
 
     @Column(name = "new_amount_minor")
     private Long newAmountMinor;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "old_pricing_snapshot", columnDefinition = "jsonb")
+    private Map<String, Object> oldPricingSnapshot;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "new_pricing_snapshot", columnDefinition = "jsonb")
+    private Map<String, Object> newPricingSnapshot;
 
     @Column(name = "changed_at", nullable = false)
     private Instant changedAt;
@@ -58,6 +69,12 @@ public class OfferPriceHistory {
 
     public Long getNewAmountMinor() { return newAmountMinor; }
     public void setNewAmountMinor(Long newAmountMinor) { this.newAmountMinor = newAmountMinor; }
+
+    public Map<String, Object> getOldPricingSnapshot() { return oldPricingSnapshot; }
+    public void setOldPricingSnapshot(Map<String, Object> oldPricingSnapshot) { this.oldPricingSnapshot = oldPricingSnapshot; }
+
+    public Map<String, Object> getNewPricingSnapshot() { return newPricingSnapshot; }
+    public void setNewPricingSnapshot(Map<String, Object> newPricingSnapshot) { this.newPricingSnapshot = newPricingSnapshot; }
 
     public Instant getChangedAt() { return changedAt; }
     public void setChangedAt(Instant changedAt) { this.changedAt = changedAt; }

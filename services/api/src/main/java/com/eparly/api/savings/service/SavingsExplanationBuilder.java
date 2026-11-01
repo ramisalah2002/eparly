@@ -44,7 +44,8 @@ public class SavingsExplanationBuilder {
     ) {
         List<String> assumptions = new ArrayList<>();
         assumptions.add("Horizon de comparaison : " + horizonMonths + " mois.");
-        assumptions.add("Périodicité de facturation conservée entre l'offre actuelle et l'alternative.");
+        assumptions.add("Coûts proratisés au mois selon la périodicité propre à chaque offre; les dates de facture ne sont pas simulées.");
+        assumptions.add("Arrondi monétaire unique au centime avec la règle HALF_UP.");
         if (promotionApplied != null && promotionApplied) {
             assumptions.add("Tarif promotionnel appliqué pendant la durée de la promotion, puis prix normal.");
         } else {
@@ -84,7 +85,7 @@ public class SavingsExplanationBuilder {
             }
         }
         if (promotionUncertain) {
-            missing.add("Conditions de promotion non vérifiées pour cet utilisateur.");
+            missing.add("Promotion non vérifiée, hors fenêtre de souscription, ou conditions d'éligibilité inconnues.");
         }
         return missing;
     }

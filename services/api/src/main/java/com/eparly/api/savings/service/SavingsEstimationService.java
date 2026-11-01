@@ -6,15 +6,10 @@ import com.eparly.api.comparison.domain.ComparisonStatus;
 import com.eparly.api.comparison.dto.ComparisonOfferResult;
 import com.eparly.api.comparison.dto.ComparisonRequest;
 import com.eparly.api.comparison.service.ComparisonService;
-import com.eparly.api.comparison.strategy.ComparisonStrategy;
 import com.eparly.api.offer.domain.CommercialOffer;
 import com.eparly.api.offer.domain.OfferBillingPeriod;
-import com.eparly.api.offer.domain.OfferEvidence;
 import com.eparly.api.offer.domain.OfferPricing;
-import com.eparly.api.offer.domain.OfferSector;
-import com.eparly.api.offer.repository.CommercialOfferRepository;
-import com.eparly.api.offer.repository.OfferEvidenceRepository;
-import com.eparly.api.offer.repository.OfferPricingRepository;
+import com.eparly.api.offer.domain.OfferEvidence;
 import com.eparly.api.recurring.domain.RecurringFrequency;
 import com.eparly.api.savings.domain.CostSource;
 import com.eparly.api.savings.domain.SavingsStatus;
@@ -48,10 +43,6 @@ public class SavingsEstimationService {
     private final SwitchingCostService switchingCostService;
     private final SavingsEligibilityValidator eligibilityValidator;
     private final SavingsExplanationBuilder explanationBuilder;
-    private final CommercialOfferRepository offerRepository;
-    private final OfferPricingRepository pricingRepository;
-    private final OfferEvidenceRepository evidenceRepository;
-    private final List<ComparisonStrategy> strategies;
 
     public SavingsEstimationService(
             ComparisonService comparisonService,
@@ -60,11 +51,7 @@ public class SavingsEstimationService {
             PromotionCalculationService promotionService,
             SwitchingCostService switchingCostService,
             SavingsEligibilityValidator eligibilityValidator,
-            SavingsExplanationBuilder explanationBuilder,
-            CommercialOfferRepository offerRepository,
-            OfferPricingRepository pricingRepository,
-            OfferEvidenceRepository evidenceRepository,
-            List<ComparisonStrategy> strategies) {
+            SavingsExplanationBuilder explanationBuilder) {
         this.comparisonService = comparisonService;
         this.baselineService = baselineService;
         this.pricingService = pricingService;
@@ -72,10 +59,6 @@ public class SavingsEstimationService {
         this.switchingCostService = switchingCostService;
         this.eligibilityValidator = eligibilityValidator;
         this.explanationBuilder = explanationBuilder;
-        this.offerRepository = offerRepository;
-        this.pricingRepository = pricingRepository;
-        this.evidenceRepository = evidenceRepository;
-        this.strategies = strategies;
     }
 
     /**
@@ -100,29 +83,39 @@ public class SavingsEstimationService {
         }
 
         // 2. Valider l'offre alternative
-        LocalDate now = LocalDate.now();
+        LocalDate now = eligibilityValidator.currentDate();
         Integer horizonMonths = request.horizonMonths() != null ? request.horizonMonths() : 12;
         LocalDate simulationStartDate = now;
 
-        SavingsEligibilityValidator.ValidatedOffer validated =
-                eligibilityValidator.validateOffer(request.offerId(), "FR", simulationStartDate);
-
-        CommercialOffer offer = validated.offer();
-        OfferPricing pricing = validated.pricing();
-        OfferEvidence evidence = validated.evidence();
-
-        // 3. Vérifier la compatibilité via le moteur de comparaison (étape 10B)
-        // Le backend ne fait pas confiance à un statut transmis par le client.
-        ComparisonStrategy strategy = findStrategy(request.sector());
         ComparisonRequest comparisonRequest = new ComparisonRequest(
                 request.subscriptionId(),
                 request.sector(),
                 request.requirements() != null ? request.requirements() : Map.of()
         );
-        List<OfferEvidence> evidenceList = evidenceRepository.findAllByOfferIdOrderByVerifiedAtDesc(offer.getId());
+        var strategy = comparisonService.validateRequest(comparisonRequest);
+
+        SavingsEligibilityValidator.ValidatedOffer validated =
+                eligibilityValidator.validateOffer(request.offerId(), "FR");
+
+        CommercialOffer offer = validated.offer();
+        if (offer.getSector() != request.sector()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Le secteur de l'offre ne correspond pas à la requête");
+        }
+        if (!validated.available()) {
+            return buildUnverifiedResponse(baseline, request, offer, validated.failureMessage());
+        }
+
+        OfferPricing pricing = validated.pricing();
+        com.eparly.api.offer.domain.OfferEvidence evidence = validated.evidence();
+        OfferEvidence promotionEvidence = eligibilityValidator.currentPromotionEvidence(offer).orElse(null);
+        boolean promotionApplicable = promotionService.isPromotionApplicable(
+                pricing, offer, simulationStartDate, promotionEvidence);
+
+        // 3. Vérifier la compatibilité via le moteur de comparaison (étape 10B)
+        // Le backend ne fait pas confiance à un statut transmis par le client.
         ComparisonOfferResult comparisonResult = strategy.evaluateOffer(
-                comparisonRequest, offer, pricing, evidenceList
-        );
+                comparisonRequest, offer, pricing,
+                promotionApplicable ? List.of(evidence, promotionEvidence) : List.of(evidence));
         if (comparisonResult.status() == ComparisonStatus.INCOMPATIBLE) {
             return buildIncompatibleResponse(baseline, request, offer);
         }
@@ -139,18 +132,14 @@ public class SavingsEstimationService {
 
         // Convertir le coût actuel en équivalent mensuel
         OfferBillingPeriod currentPeriod = convertFrequencyToBillingPeriod(currentFreq);
-        Long currentTotalCost = pricingService.calculateTotalCost(currentMonthlyCost, currentPeriod, horizonMonths);
+        boolean currencyMismatch = baseline.currency() == null
+                || !"EUR".equalsIgnoreCase(baseline.currency());
+        Long currentTotalCost = currencyMismatch ? null
+                : pricingService.calculateTotalCost(currentMonthlyCost, currentPeriod, horizonMonths);
 
-        // Coût alternatif avec promotion
-        // Le prix pendant la promotion = amountMinor * (1 - promotionPercent/100), arrondi au centime près
+        // The standard amount is the post-promotion recurring price.
         OfferBillingPeriod altPeriod = pricing.getBillingPeriod();
-        Long promotionPriceMinor = null;
-        if (pricing.getAmountMinor() != null && pricing.getPromotionPercent() != null) {
-            promotionPriceMinor = BigDecimal.valueOf(pricing.getAmountMinor())
-                    .multiply(BigDecimal.valueOf(100 - pricing.getPromotionPercent()))
-                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-                    .longValue();
-        }
+        Long promotionPriceMinor = promotionApplicable ? promotionService.promotionPriceMinor(pricing) : null;
         Long altTotalCost = pricingService.calculateTotalCostWithPromotion(
                 pricing.getAmountMinor(),
                 altPeriod,
@@ -200,7 +189,7 @@ public class SavingsEstimationService {
         // 8. Construire les explications
         List<String> assumptions = explanationBuilder.buildAssumptions(
                 horizonMonths,
-                promotionService.isPromotionApplicable(pricing, simulationStartDate),
+                promotionApplicable,
                 totalSwitchingCost,
                 missingFees,
                 baseline.costSource() == CostSource.TRANSACTION_OBSERVED
@@ -209,9 +198,12 @@ public class SavingsEstimationService {
         List<String> missingInformation = explanationBuilder.buildMissingInformation(
                 currentCostMissing,
                 missingFees,
-                !promotionService.isPromotionApplicable(pricing, simulationStartDate)
-                        && pricing.getPromotionPercent() != null
+                promotionService.hasPromotion(pricing) && !promotionApplicable
         );
+        if (currencyMismatch) {
+            missingInformation = new ArrayList<>(missingInformation);
+            missingInformation.add("Devise de l'abonnement actuel différente de l'EUR ; aucune conversion n'est appliquée.");
+        }
 
         List<String> calculationSteps = explanationBuilder.buildCalculationSteps(
                 currentTotalCost,
@@ -228,16 +220,17 @@ public class SavingsEstimationService {
         Long altMonthlyCost = pricingService.calculateEffectiveMonthlyCostWithPromotion(
                 pricing.getAmountMinor(),
                 altPeriod,
-                pricing.getPriceAfterPromotionMinor(),
+                promotionPriceMinor,
                 pricing.getPromotionDurationMonths(),
                 horizonMonths
         );
 
-        Long currentAnnualCost = pricingService.calculateTotalCost(currentMonthlyCost, currentPeriod, 12);
+        Long currentAnnualCost = currencyMismatch ? null
+                : pricingService.calculateTotalCost(currentMonthlyCost, currentPeriod, 12);
         Long altAnnualCost = pricingService.calculateTotalCostWithPromotion(
                 pricing.getAmountMinor(),
                 altPeriod,
-                pricing.getPriceAfterPromotionMinor(),
+                promotionPriceMinor,
                 pricing.getPromotionDurationMonths(),
                 12
         );
@@ -245,13 +238,17 @@ public class SavingsEstimationService {
         Long estimatedMonthlySavings = null;
         if (netSavings != null && horizonMonths > 0) {
             try {
-                estimatedMonthlySavings = netSavings / horizonMonths;
-            } catch (ArithmeticException ignored) {
+                estimatedMonthlySavings = BigDecimal.valueOf(netSavings)
+                        .divide(BigDecimal.valueOf(horizonMonths), 0, RoundingMode.HALF_UP)
+                        .longValueExact();
+            } catch (ArithmeticException e) {
+                estimatedMonthlySavings = null;
             }
         }
 
-        Instant verifiedAt = evidence != null ? evidence.getVerifiedAt() : null;
-        String officialUrl = evidence != null ? evidence.getOfficialUrl() : null;
+        OfferEvidence traceEvidence = promotionApplicable ? promotionEvidence : evidence;
+        Instant verifiedAt = traceEvidence != null ? traceEvidence.getVerifiedAt() : null;
+        String officialUrl = traceEvidence != null ? traceEvidence.getOfficialUrl() : null;
 
         return new SavingsEstimateResponse(
                 // 1-3: Abonnement actuel
@@ -278,9 +275,9 @@ public class SavingsEstimationService {
                 altMonthlyCost,
                 altAnnualCost,
                 // 18-20: Promotion
-                pricing.getPriceAfterPromotionMinor(),
-                pricing.getPromotionDurationMonths(),
-                pricing.getPriceAfterPromotionMinor(),
+                promotionPriceMinor,
+                promotionApplicable ? pricing.getPromotionDurationMonths() : null,
+                pricing.getAmountMinor(),
                 // 21-24: Frais de changement
                 cancellationFee,
                 activationFee,
@@ -327,7 +324,7 @@ public class SavingsEstimationService {
                 SavingsStatus.INSUFFICIENT_DATA,
                 // 9-10: Horizon et date
                 horizonMonths,
-                LocalDate.now(),
+                eligibilityValidator.currentDate(),
                 // 11-14: Coût actuel (nul)
                 null, null, null, null,
                 // 15-17: Coût alternatif (nul)
@@ -375,7 +372,7 @@ public class SavingsEstimationService {
                 SavingsStatus.INSUFFICIENT_DATA,
                 // 9-10: Horizon et date
                 horizonMonths,
-                LocalDate.now(),
+                eligibilityValidator.currentDate(),
                 // 11-14: Coût actuel (nul)
                 null, null, null, null,
                 // 15-17: Coût alternatif (nul)
@@ -410,13 +407,6 @@ public class SavingsEstimationService {
         };
     }
 
-    private ComparisonStrategy findStrategy(OfferSector sector) {
-        for (ComparisonStrategy s : strategies) {
-            if (s.supportedSector() == sector) return s;
-        }
-        throw new ApiException(HttpStatus.NOT_FOUND, "Aucune stratégie de comparaison pour le secteur: " + sector);
-    }
-
     private SavingsEstimateResponse buildIncompatibleResponse(SubscriptionCostSnapshot baseline,
                                                               SavingsEstimateRequest request,
                                                               CommercialOffer offer) {
@@ -442,13 +432,53 @@ public class SavingsEstimationService {
                 offer.getSector(),
                 SavingsStatus.INCOMPATIBLE_OFFER,
                 horizonMonths,
-                LocalDate.now(),
+                eligibilityValidator.currentDate(),
                 null, null, null, null,
                 null, null, null,
                 null, null, null,
                 null, null, null, null,
                 null, null,
                 "L'offre alternative n'est pas compatible avec vos critères. Aucun calcul d'économies n'est possible.",
+                assumptions,
+                missingInformation,
+                calculationSteps,
+                null, null,
+                Instant.now()
+        );
+    }
+
+    private SavingsEstimateResponse buildUnverifiedResponse(SubscriptionCostSnapshot baseline,
+                                                            SavingsEstimateRequest request,
+                                                            CommercialOffer offer,
+                                                            String reason) {
+        Integer horizonMonths = request.horizonMonths() != null ? request.horizonMonths() : 12;
+        List<String> assumptions = List.of(
+                "L'offre alternative ne peut pas être présentée comme actuellement disponible.",
+                "Aucune économie n'est calculée sans une offre et une preuve commerciales valides."
+        );
+        List<String> missingInformation = List.of(reason);
+        List<String> calculationSteps = List.of(
+                "1. Vérification du statut de disponibilité : échec.",
+                "2. Aucun calcul d'économies n'est effectué."
+        );
+
+        return new SavingsEstimateResponse(
+                baseline.subscriptionId(),
+                baseline.subscriptionName(),
+                baseline.currentProvider(),
+                offer.getId(),
+                offer.getCommercialName(),
+                offer.getProvider().getName(),
+                offer.getSector(),
+                SavingsStatus.UNVERIFIED_OFFER,
+                horizonMonths,
+                eligibilityValidator.currentDate(),
+                null, null, null, null,
+                null, null, null,
+                null, null, null,
+                null, null, null, null,
+                null, null,
+                explanationBuilder.buildGlobalExplanation(SavingsStatus.UNVERIFIED_OFFER, null, baseline.currency()),
                 assumptions,
                 missingInformation,
                 calculationSteps,
@@ -482,7 +512,7 @@ public class SavingsEstimationService {
                 offer.getSector(),
                 SavingsStatus.NOT_ELIGIBLE,
                 horizonMonths,
-                LocalDate.now(),
+                eligibilityValidator.currentDate(),
                 null, null, null, null,
                 null, null, null,
                 null, null, null,
@@ -522,7 +552,7 @@ public class SavingsEstimationService {
                 offer.getSector(),
                 SavingsStatus.INSUFFICIENT_DATA,
                 horizonMonths,
-                LocalDate.now(),
+                eligibilityValidator.currentDate(),
                 null, null, null, null,
                 null, null, null,
                 null, null, null,

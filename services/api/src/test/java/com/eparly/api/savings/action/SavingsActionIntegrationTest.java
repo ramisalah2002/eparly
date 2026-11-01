@@ -223,7 +223,7 @@ class SavingsActionIntegrationTest {
         requestBody.put("offerId", offer.getId());
         requestBody.put("sector", "STREAMING");
         requestBody.put("horizonMonths", 12);
-        requestBody.put("requirements", Map.of());
+        requestBody.put("requirements", Map.of("minScreens", 1));
         requestBody.put("userKnownCancellationFeeMinor", userKnownCancellationFeeMinor);
         requestBody.put("userKnownOtherFeesMinor", userKnownOtherFeesMinor);
         requestBody.put("notes", "Action planifiée lors du test Phase 1");
@@ -337,7 +337,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -400,7 +400,7 @@ class SavingsActionIntegrationTest {
         req.put("offerId", offer.getId());
         req.put("sector", "STREAMING");
         req.put("horizonMonths", 12);
-        req.put("requirements", Map.of());
+        req.put("requirements", Map.of("minScreens", 1));
         // omit userKnownCancellationFeeMinor and otherFees -> null
 
         mockMvc.perform(post("/v1/savings/actions")
@@ -429,7 +429,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -458,7 +458,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -475,14 +475,17 @@ class SavingsActionIntegrationTest {
         // Now modify catalogue price to 29.99€ (2999 centimes)
         pricing.setAmountMinor(2999L);
         pricingRepository.saveAndFlush(pricing);
+        offer.setPublicationStatus(OfferStatus.EXPIRED);
+        offerRepository.saveAndFlush(offer);
 
         // Fetch action via GET endpoint
         mockMvc.perform(get("/v1/savings/actions/" + actionId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estimateSnapshot.alternativeTotalCostMinor").value(11988))
-                .andExpect(jsonPath("$.estimateSnapshot.potentialNetSavingsMinor").value(12000));
-        // Note: 1999*12 = 23988, 999*12 = 11988, net = 12000. Remains completely unchanged!
+                .andExpect(jsonPath("$.estimateSnapshot.potentialNetSavingsMinor").value(12000))
+                .andExpect(jsonPath("$.estimateSnapshot.offerVerifiedAt").exists());
+        // Historical snapshot remains unchanged even after the price and publication status change.
     }
 
     @Test
@@ -502,7 +505,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -580,7 +583,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -635,7 +638,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -688,7 +691,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -743,7 +746,7 @@ class SavingsActionIntegrationTest {
                 "offerId", offer.getId(),
                 "sector", "STREAMING",
                 "horizonMonths", 12,
-                "requirements", Map.of(),
+                "requirements", Map.of("minScreens", 1),
                 "userKnownCancellationFeeMinor", 0L,
                 "userKnownOtherFeesMinor", 0L
         );
@@ -801,7 +804,7 @@ class SavingsActionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "subscriptionId", sub1.getId(), "offerId", offer1.getId(),
-                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                                 "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID a1Id = UUID.fromString(objectMapper.readTree(resp1).get("id").asText());
@@ -812,7 +815,7 @@ class SavingsActionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "subscriptionId", sub2.getId(), "offerId", offer2.getId(),
-                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                                 "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID a2Id = UUID.fromString(objectMapper.readTree(resp2).get("id").asText());
@@ -880,7 +883,7 @@ class SavingsActionIntegrationTest {
         mockMvc.perform(post("/v1/savings/actions").header(HttpHeaders.AUTHORIZATION, bearer(user))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("subscriptionId", sub1.getId(), "offerId", offer1.getId(),
-                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                         "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated());
 
@@ -888,7 +891,7 @@ class SavingsActionIntegrationTest {
         String r2 = mockMvc.perform(post("/v1/savings/actions").header(HttpHeaders.AUTHORIZATION, bearer(user))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("subscriptionId", sub2.getId(), "offerId", offer2.getId(),
-                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                         "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         mockMvc.perform(patch("/v1/savings/actions/" + objectMapper.readTree(r2).get("id").asText() + "/status")
@@ -899,7 +902,7 @@ class SavingsActionIntegrationTest {
         String r3 = mockMvc.perform(post("/v1/savings/actions").header(HttpHeaders.AUTHORIZATION, bearer(user))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("subscriptionId", sub3.getId(), "offerId", offer3.getId(),
-                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                         "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID a3Id = UUID.fromString(objectMapper.readTree(r3).get("id").asText());
@@ -913,7 +916,7 @@ class SavingsActionIntegrationTest {
         String r4 = mockMvc.perform(post("/v1/savings/actions").header(HttpHeaders.AUTHORIZATION, bearer(user))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("subscriptionId", sub4.getId(), "offerId", offer4.getId(),
-                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                        "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                         "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         mockMvc.perform(patch("/v1/savings/actions/" + objectMapper.readTree(r4).get("id").asText() + "/status")
@@ -988,7 +991,7 @@ class SavingsActionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "subscriptionId", subA.getId(), "offerId", offer.getId(),
-                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                                 "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID actionIdA = UUID.fromString(objectMapper.readTree(respA).get("id").asText());
@@ -1013,7 +1016,7 @@ class SavingsActionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "subscriptionId", subA.getId(), "offerId", offer.getId(),
-                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                                 "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Abonnement introuvable"));
@@ -1040,7 +1043,7 @@ class SavingsActionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "subscriptionId", subscription.getId(), "offerId", offer.getId(),
-                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of(),
+                                "sector", "STREAMING", "horizonMonths", 12, "requirements", Map.of("minScreens", 1),
                                 "userKnownCancellationFeeMinor", 0L, "userKnownOtherFeesMinor", 0L))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID actionId = UUID.fromString(objectMapper.readTree(createResp).get("id").asText());

@@ -12,6 +12,8 @@ import com.eparly.api.comparison.dto.CriterionEvaluation;
 import com.eparly.api.comparison.service.ComparisonExplanationBuilder;
 import com.eparly.api.offer.domain.CommercialOffer;
 import com.eparly.api.offer.domain.OfferEvidence;
+import com.eparly.api.offer.domain.OfferEvidenceScope;
+import com.eparly.api.offer.domain.EvidenceStatus;
 import com.eparly.api.offer.domain.OfferPricing;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,6 +71,10 @@ public class MobilePlanComparisonStrategy implements ComparisonStrategy {
         if (req == null || req.isEmpty()) {
             throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
                     "Au moins un critère de besoin mobile est requis");
+        }
+        if (req.containsKey("roamingCountries")) {
+            throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Le critère roamingCountries n'est pas pris en charge");
         }
         for (String key : req.keySet()) {
             if (MobilePlanCriterion.fromCode(key) == null) {
@@ -154,6 +160,9 @@ public class MobilePlanComparisonStrategy implements ComparisonStrategy {
 
         ComparisonStatus status = computeStatus(criteria);
         Integer heuristicScore = computeHeuristicScore(criteria, status);
+        boolean promotionVerified = evidence != null && evidence.stream().anyMatch(e ->
+                e.getEvidenceScope() == OfferEvidenceScope.PROMOTION
+                        && e.getVerificationStatus() == EvidenceStatus.VERIFIED);
 
         return new ComparisonOfferResult(
                 offer.getId(), offer.getCommercialName(), offer.getProvider().getName(),
@@ -161,14 +170,20 @@ public class MobilePlanComparisonStrategy implements ComparisonStrategy {
                 pricing != null ? pricing.getAmountMinor() : null,
                 pricing != null ? pricing.getCurrency() : null,
                 pricing != null ? pricing.getBillingPeriod().name() : null,
-                pricing != null ? pricing.getPriceAfterPromotionMinor() : null,
-                pricing != null ? pricing.getPromotionPercent() : null,
-                pricing != null ? pricing.getPromotionDurationMonths() : null,
+                promotionVerified && pricing != null && pricing.getPromotionPriceType()
+                        == com.eparly.api.offer.domain.PromotionPriceType.FIXED_PRICE
+                        ? pricing.getPriceAfterPromotionMinor() : null,
+                promotionVerified && pricing != null ? pricing.getPromotionPercent() : null,
+                promotionVerified && pricing != null ? pricing.getPromotionDurationMonths() : null,
                 pricing != null ? pricing.getActivationFeeMinor() : null,
                 offer.getCommitment(), offer.getTerritory(),
                 evidence != null && !evidence.isEmpty() ? evidence.get(0).getOfficialUrl() : null,
                 evidence != null && !evidence.isEmpty() ? evidence.get(0).getVerifiedAt() : null,
-                heuristicScore
+                heuristicScore,
+                promotionVerified && pricing != null ? pricing.getPromotionPriceType() : null,
+                promotionVerified && pricing != null ? pricing.getPromotionValidFrom() : null,
+                promotionVerified && pricing != null ? pricing.getPromotionValidUntil() : null,
+                promotionVerified
         );
     }
 

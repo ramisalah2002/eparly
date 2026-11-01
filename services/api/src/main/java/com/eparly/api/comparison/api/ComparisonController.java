@@ -57,7 +57,7 @@ public class ComparisonController {
     @PostMapping("/evaluate")
     @ResponseStatus(HttpStatus.OK)
     @Operation(summary = "Évaluer les offres alternatives",
-            description = "Compare les offres vérifiées du catalogue avec les besoins de l'utilisateur pour un abonnement donné. "
+            description = "Compare les offres actuellement disponibles du catalogue avec les besoins de l'utilisateur pour un abonnement donné. "
                     + "Ne calcule pas d'économies (étape 10C).")
     @ApiResponse(responseCode = "200", description = "Résultats de comparaison", content = @Content(
             schema = @Schema(implementation = ComparisonResponse.class)))
