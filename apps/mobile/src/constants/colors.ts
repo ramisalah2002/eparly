@@ -20,6 +20,12 @@ export const BRAND_COLORS = {
   deepLavender: '#8067A1',
   softGold: '#E7C778',
 
+  // Quick Action Card Pastels
+  quickActionLavender: '#C9C8F5',
+  quickActionPeach: '#EFE0D5',
+  quickActionYellow: '#EBD98C',
+  quickActionMint: '#CBE7DF',
+
   // Borders & Accents
   borderLavender: 'rgba(168, 155, 190, 0.45)',
   cardBorder: 'rgba(168, 155, 190, 0.20)',

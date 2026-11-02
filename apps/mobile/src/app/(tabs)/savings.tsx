@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BRAND_COLORS } from '@/constants/colors';
+import { FONT_FAMILY } from '@/constants/typography';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function SavingsScreen() {
@@ -73,11 +74,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.four,
   },
   title: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 26,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
   },
   subtitle: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     color: BRAND_COLORS.secondaryText,
     marginTop: 2,
@@ -108,6 +111,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
   },
   cardTitle: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 18,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
@@ -115,6 +119,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cardDescription: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     color: BRAND_COLORS.secondaryText,
     textAlign: 'center',
@@ -140,6 +145,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   featureText: {
+    fontFamily: FONT_FAMILY.medium,
     fontSize: 12,
     color: BRAND_COLORS.darkCharcoal,
     flex: 1,

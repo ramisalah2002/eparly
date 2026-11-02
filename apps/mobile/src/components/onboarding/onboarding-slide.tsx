@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ONBOARDING_COLORS, OnboardingSlideItem } from '@/constants/onboarding';
+import { FONT_FAMILY } from '@/constants/typography';
 
 interface OnboardingSlideProps {
   item: OnboardingSlideItem;
@@ -211,19 +212,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   headline: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 30,
     fontWeight: '700',
     color: ONBOARDING_COLORS.darkCharcoal,
     textAlign: 'center',
     letterSpacing: -0.6,
     lineHeight: 38,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'sans-serif-medium',
-      default: 'system-ui',
-    }),
   },
   description: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 15.5,
     fontWeight: '400',
     color: ONBOARDING_COLORS.secondaryText,
@@ -232,10 +230,5 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     marginTop: 12,
     maxWidth: 320,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'sans-serif',
-      default: 'system-ui',
-    }),
   },
 });

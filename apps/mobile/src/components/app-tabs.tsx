@@ -1,18 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React from 'react';
 import {
-  LayoutChangeEvent,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePathname } from 'expo-router';
 import {
   Tabs,
   TabList,
@@ -25,56 +18,52 @@ import {
   ArrowLeftRight,
   House,
   PiggyBank,
-  Repeat,
+  Repeat2,
   UserRound,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const TabLayoutContext = React.createContext<(index: number, e: LayoutChangeEvent) => void>(() => { });
+import { BRAND_COLORS } from '@/constants/colors';
+import { FONT_FAMILY } from '@/constants/typography';
 
 export default function AppTabs() {
   return (
     <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+      <TabSlot style={styles.tabSlot} />
       <TabList asChild>
         <FloatingTabBar>
           <TabTrigger name="index" href="/(tabs)" asChild>
             <TabButton
-              index={0}
               label="Home"
-              renderIcon={(color) => <House size={18} color={color} strokeWidth={2.2} />}
+              renderIcon={(color) => <House size={21} color={color} strokeWidth={2.0} />}
             />
           </TabTrigger>
 
           <TabTrigger name="transactions" href="/(tabs)/transactions" asChild>
             <TabButton
-              index={1}
-              label="Transactions"
-              renderIcon={(color) => <ArrowLeftRight size={18} color={color} strokeWidth={2.2} />}
+              label="Activity"
+              renderIcon={(color) => <ArrowLeftRight size={21} color={color} strokeWidth={2.0} />}
             />
           </TabTrigger>
 
           <TabTrigger name="subscriptions" href="/(tabs)/subscriptions" asChild>
             <TabButton
-              index={2}
-              label="Subscriptions"
-              renderIcon={(color) => <Repeat size={18} color={color} strokeWidth={2.2} />}
+              label="Recurring"
+              renderIcon={(color) => <Repeat2 size={21} color={color} strokeWidth={2.0} />}
             />
           </TabTrigger>
 
           <TabTrigger name="savings" href="/(tabs)/savings" asChild>
             <TabButton
-              index={3}
               label="Savings"
-              renderIcon={(color) => <PiggyBank size={18} color={color} strokeWidth={2.2} />}
+              renderIcon={(color) => <PiggyBank size={21} color={color} strokeWidth={2.0} />}
             />
           </TabTrigger>
 
           <TabTrigger name="profile" href="/(tabs)/profile" asChild>
             <TabButton
-              index={4}
               label="Profile"
-              renderIcon={(color) => <UserRound size={18} color={color} strokeWidth={2.2} />}
+              renderIcon={(color) => <UserRound size={21} color={color} strokeWidth={2.0} />}
             />
           </TabTrigger>
         </FloatingTabBar>
@@ -83,40 +72,41 @@ export default function AppTabs() {
   );
 }
 
-interface TabButtonProps extends TabTriggerSlotProps {
-  index: number;
+export interface TabButtonProps extends TabTriggerSlotProps {
   label: string;
   renderIcon: (color: string) => React.ReactNode;
 }
 
 export function TabButton({
-  index,
   label,
   renderIcon,
   isFocused,
   ...props
 }: TabButtonProps) {
-  const onTabLayout = React.useContext(TabLayoutContext);
   const { ref: _unusedRef, ...pressableProps } = props as unknown as {
     ref?: unknown;
     [key: string]: unknown;
   };
 
-  const activeColor = '#000000';
-  const inactiveColor = '#8E8E93';
+  const activeColor = BRAND_COLORS.deepLavender;
+  const inactiveColor = BRAND_COLORS.secondaryText;
   const currentColor = isFocused ? activeColor : inactiveColor;
 
   return (
     <Pressable
       {...(pressableProps as any)}
-      onLayout={(e) => onTabLayout(index, e)}
       style={({ pressed }) => [
         styles.tabButton,
         pressed && styles.tabButtonPressed,
       ]}
       accessibilityRole="tab"
-      accessibilityState={{ selected: isFocused }}>
-      <View style={styles.iconContainer}>
+      accessibilityState={{ selected: isFocused }}
+      accessibilityLabel={`${label}, tab`}>
+      <View
+        style={[
+          styles.iconCapsule,
+          isFocused ? styles.iconCapsuleActive : styles.iconCapsuleInactive,
+        ]}>
         {renderIcon(currentColor)}
       </View>
       <Text
@@ -133,64 +123,7 @@ export function TabButton({
 
 function FloatingTabBar({ children, ...props }: React.PropsWithChildren<TabListProps>) {
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
-  const [tabLayouts, setTabLayouts] = useState<Record<number, { x: number; width: number }>>({});
-
-  const getRouteIndex = (path: string): number => {
-    if (path.includes('/transactions')) return 1;
-    if (path.includes('/subscriptions')) return 2;
-    if (path.includes('/savings')) return 3;
-    if (path.includes('/profile')) return 4;
-    return 0; // Home
-  };
-
-  const activeIndex = useMemo(() => getRouteIndex(pathname), [pathname]);
-  const isFirstRender = useRef(true);
-
-  const indicatorTranslateX = useSharedValue(0);
-  const indicatorWidth = useSharedValue(0);
-
-  const handleTabLayout = (index: number, e: LayoutChangeEvent) => {
-    const { x, width } = e.nativeEvent.layout;
-    if (width > 0) {
-      setTabLayouts((prev) => {
-        if (prev[index]?.x === x && prev[index]?.width === width) {
-          return prev;
-        }
-        return { ...prev, [index]: { x, width } };
-      });
-    }
-  };
-
-  const activeLayout = tabLayouts[activeIndex];
-
-  useEffect(() => {
-    if (activeLayout && activeLayout.width > 0) {
-      if (isFirstRender.current) {
-        indicatorTranslateX.value = activeLayout.x;
-        indicatorWidth.value = activeLayout.width;
-        isFirstRender.current = false;
-      } else {
-        indicatorTranslateX.value = withSpring(activeLayout.x, {
-          damping: 20,
-          stiffness: 220,
-          mass: 0.6,
-        });
-        indicatorWidth.value = withSpring(activeLayout.width, {
-          damping: 20,
-          stiffness: 220,
-          mass: 0.6,
-        });
-      }
-    }
-  }, [activeIndex, activeLayout, indicatorTranslateX, indicatorWidth]);
-
-  const animatedIndicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: indicatorTranslateX.value }],
-    width: indicatorWidth.value > 0 ? indicatorWidth.value : undefined,
-  }));
-
-  const bottomClearance = insets.bottom > 20 ? insets.bottom - 16 : 12;
+  const bottomClearance = insets.bottom > 20 ? insets.bottom - 8 : 12;
 
   return (
     <View
@@ -199,37 +132,21 @@ function FloatingTabBar({ children, ...props }: React.PropsWithChildren<TabListP
         styles.tabBarWrapper,
         { paddingBottom: Math.max(bottomClearance, 12) },
       ]}>
-      {/* Soft translucent gradient shadow: dims and softens scrolling content without completely blocking it */}
+      {/* Soft translucent gradient scrim: fades scrolling content behind dock */}
       <LinearGradient
         pointerEvents="none"
         colors={[
           'rgba(250, 249, 246, 0)',
-          'rgba(235, 233, 228, 0.18)',
-          'rgba(245, 243, 239, 0.42)',
-          'rgba(245, 243, 239, 0.62)',
+          'rgba(240, 236, 245, 0.35)',
+          'rgba(250, 249, 246, 0.85)',
         ]}
-        locations={[0, 0.35, 0.72, 1]}
+        locations={[0, 0.45, 1]}
         style={styles.bottomGradientScrim}
       />
 
       <View style={styles.floatingCapsule}>
-        {/* Inner container where indicator and tabs share identical coordinate space */}
-        <View style={styles.innerContainer}>
-          {activeLayout && (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.animatedIndicator,
-                animatedIndicatorStyle,
-              ]}
-            />
-          )}
-
-          <TabLayoutContext.Provider value={handleTabLayout}>
-            <View style={styles.tabsRow}>
-              {children}
-            </View>
-          </TabLayoutContext.Provider>
+        <View style={styles.tabsRow}>
+          {children}
         </View>
       </View>
     </View>
@@ -237,6 +154,9 @@ function FloatingTabBar({ children, ...props }: React.PropsWithChildren<TabListP
 }
 
 const styles = StyleSheet.create({
+  tabSlot: {
+    height: '100%',
+  },
   tabBarWrapper: {
     position: 'absolute',
     bottom: 0,
@@ -252,82 +172,77 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 120,
+    height: 110,
     zIndex: 0,
   },
   floatingCapsule: {
     width: '100%',
     maxWidth: 440,
-    height: 76,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 38,
-    paddingHorizontal: 4,
+    height: 68,
+    backgroundColor: BRAND_COLORS.pureWhite,
+    borderRadius: 34,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.07)',
+    borderColor: 'rgba(168, 155, 190, 0.22)',
     zIndex: 1,
     // iOS shadow
-    shadowColor: '#000000',
+    shadowColor: BRAND_COLORS.darkCharcoal,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.10,
-    shadowRadius: 18,
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     // Android elevation
-    elevation: 8,
-  },
-  innerContainer: {
-    flex: 1,
-    height: '100%',
-    position: 'relative',
-  },
-  animatedIndicator: {
-    position: 'absolute',
-    top: 1,
-    bottom: 1,
-    borderRadius: 31,
-    backgroundColor: '#F1F2F6', // Soft, clean neutral background
-    zIndex: 0,
+    elevation: 6,
   },
   tabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
     height: '100%',
-    zIndex: 1,
   },
   tabButton: {
     flex: 1,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 6,
-    paddingBottom: 6,
-    paddingHorizontal: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
   },
   tabButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.96 }],
+    opacity: 0.88,
+    transform: [{ scale: 0.94 }],
   },
-  iconContainer: {
+  iconCapsule: {
+    width: 48,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
-    height: 22,
-    marginBottom: 3,
+    marginBottom: 2,
+  },
+  iconCapsuleActive: {
+    backgroundColor: 'rgba(128, 103, 161, 0.12)',
+  },
+  iconCapsuleInactive: {
+    backgroundColor: 'transparent',
   },
   tabLabel: {
-    fontSize: 9.5,
-    letterSpacing: -0.2,
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 10.5,
+    letterSpacing: -0.15,
     textAlign: 'center',
     maxWidth: '100%',
   },
   tabLabelActive: {
-    color: '#000000',
+    fontFamily: FONT_FAMILY.bold,
+    color: BRAND_COLORS.deepLavender,
     fontWeight: '700',
   },
   tabLabelInactive: {
-    color: '#8E8E93',
+    fontFamily: FONT_FAMILY.medium,
+    color: BRAND_COLORS.secondaryText,
     fontWeight: '500',
   },
 });

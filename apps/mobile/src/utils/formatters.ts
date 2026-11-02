@@ -156,3 +156,258 @@ export function getAvatarInitials(fullName?: string | null, email?: string | nul
   }
   return 'EP';
 }
+
+/**
+ * Natural capitalization helper (e.g. "RAMI" -> "Rami", "jean-luc" -> "Jean-Luc")
+ */
+export function formatNaturalCapitalization(name?: string | null): string {
+  if (!name || !name.trim()) return '';
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/(?:^|[\s-])\p{L}/gu, (char) => char.toUpperCase());
+}
+
+/**
+ * Formats date into a clean, editorial uppercase contextual date (e.g. "SUN, 1 NOV")
+ */
+export function formatHeaderContextDate(date = new Date()): string {
+  try {
+    const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date);
+    const day = date.getDate();
+    const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date);
+    return `${weekday}, ${day} ${month}`.toUpperCase();
+  } catch {
+    return 'TODAY';
+  }
+}
+
+/**
+ * Formats date into a refined editorial natural-cased contextual date (e.g. "Monday, 2 November")
+ */
+export function formatMonographHeaderDate(date = new Date()): string {
+  try {
+    const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date);
+    const day = date.getDate();
+    const month = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(date);
+    return `${weekday}, ${day} ${month}`;
+  } catch {
+    return 'Today';
+  }
+}
+
+/**
+ * Sanitizes initials: removes emojis/special characters and limits to 2 characters
+ */
+export function sanitizeInitials(initials?: string | null): string {
+  if (!initials || !initials.trim()) return 'EP';
+  const cleaned = initials.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase();
+  return cleaned || 'EP';
+}
+
+export interface FormattedMoneyParts {
+  sign: string;
+  prefixCurrency: string;
+  integerText: string;
+  decimalText: string;
+  suffixCurrency: string;
+  fullFormatted: string;
+}
+
+export interface ParseMoneyPartsOptions {
+  showSign?: boolean;
+  hideDecimals?: boolean;
+}
+
+/**
+ * Splits a minor-unit financial amount into localized typographical parts:
+ * prefix currency, integer with group separators, decimal with fraction, and suffix currency.
+ * Eliminates floating point rounding issues for monetary precision.
+ */
+export function parseMoneyParts(
+  amountMinor: number | null | undefined,
+  currency = 'EUR',
+  locale = 'en-IE',
+  options: ParseMoneyPartsOptions = {}
+): FormattedMoneyParts {
+  if (amountMinor === null || amountMinor === undefined || isNaN(amountMinor)) {
+    return {
+      sign: '',
+      prefixCurrency: '',
+      integerText: '—',
+      decimalText: '',
+      suffixCurrency: ` ${currency}`,
+      fullFormatted: `— ${currency}`,
+    };
+  }
+
+  const isNegative = amountMinor < 0;
+  const absMinor = Math.abs(amountMinor);
+  const major = absMinor / 100;
+  const hideDecimals = Boolean(options.hideDecimals);
+
+  const formatter = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: hideDecimals ? 0 : 2,
+    maximumFractionDigits: hideDecimals ? 0 : 2,
+  });
+
+  let prefixCurrency = '';
+  let integerText = '';
+  let decimalText = '';
+  let suffixCurrency = '';
+
+  // Hermes (React Native) does not implement Intl.NumberFormat.prototype.formatToParts.
+  // Use formatToParts if available, otherwise safely parse the standard format() output.
+  if (typeof formatter.formatToParts === 'function') {
+    const parts = formatter.formatToParts(major);
+    let foundDecimal = false;
+    let foundInteger = false;
+
+    for (const part of parts) {
+      if (part.type === 'currency') {
+        if (!foundInteger) {
+          prefixCurrency += part.value;
+        } else {
+          suffixCurrency += part.value;
+        }
+      } else if (part.type === 'integer' || part.type === 'group') {
+        foundInteger = true;
+        integerText += part.value;
+      } else if (part.type === 'decimal' || part.type === 'fraction') {
+        foundDecimal = true;
+        decimalText += part.value;
+      } else if (part.type === 'literal') {
+        if (foundDecimal || hideDecimals) {
+          suffixCurrency += part.value;
+        }
+      }
+    }
+  } else {
+    // Hermes engine fallback
+    const formatted = formatter.format(major);
+    if (hideDecimals) {
+      const match = formatted.match(/^([^\d\n\r]*?)((?:\d[^\d\n\r]?)*\d+)([^\d\n\r]*)$/);
+      if (match) {
+        prefixCurrency = match[1];
+        integerText = match[2];
+        decimalText = '';
+        suffixCurrency = match[3];
+      } else {
+        integerText = formatted;
+      }
+    } else {
+      const match = formatted.match(/^([^\d\n\r]*?)((?:\d[^\d\n\r]?)*\d+)([.,])(\d{2})([^\d\n\r]*)$/);
+      if (match) {
+        prefixCurrency = match[1];
+        integerText = match[2];
+        decimalText = match[3] + match[4];
+        suffixCurrency = match[5];
+      } else {
+        integerText = formatted;
+      }
+    }
+  }
+
+  let sign = '';
+  if (isNegative) {
+    sign = '-';
+  } else if (options.showSign && amountMinor > 0) {
+    sign = '+';
+  }
+
+  const fullFormatted = `${sign}${formatter.format(major)}`;
+
+  return {
+    sign,
+    prefixCurrency,
+    integerText,
+    decimalText,
+    suffixCurrency,
+    fullFormatted,
+  };
+}
+
+/**
+ * Computes the percentage share of an amount relative to a total amount safely.
+ * Returns a 1-decimal string (e.g. "30.5") and guards against division by zero.
+ */
+export function computeCategoryShare(amountMinor: number, totalMinor: number): string {
+  if (!totalMinor || totalMinor <= 0) return '0.0';
+  return ((amountMinor / totalMinor) * 100).toFixed(1);
+}
+
+export interface TransactionDateGroup<T> {
+  id: string;
+  title: string;
+  transactions: T[];
+}
+
+export interface GroupTransactionsOptions {
+  referenceDate?: Date | string;
+}
+
+/**
+ * Groups transactions into editorial date sections: "Today", "Yesterday", and "Earlier".
+ * Evaluates local calendar days to prevent timezone off-by-one errors.
+ */
+export function groupTransactionsByDate<T extends { date?: string; dateLabel?: string }>(
+  transactions: T[],
+  options: GroupTransactionsOptions = {}
+): TransactionDateGroup<T>[] {
+  if (!transactions || transactions.length === 0) {
+    return [];
+  }
+
+  // Reference date: default to demo Oct 29, 2026 if not specified
+  const ref = options.referenceDate
+    ? (typeof options.referenceDate === 'string' ? new Date(options.referenceDate) : options.referenceDate)
+    : new Date(2026, 9, 29);
+
+  const refMidnight = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()).getTime();
+
+  const groupsMap = new Map<string, { id: string; title: string; transactions: T[] }>();
+  groupsMap.set('today', { id: 'today', title: 'Today', transactions: [] });
+  groupsMap.set('yesterday', { id: 'yesterday', title: 'Yesterday', transactions: [] });
+  groupsMap.set('earlier', { id: 'earlier', title: 'Earlier', transactions: [] });
+
+  for (const tx of transactions) {
+    let txDate: Date | null = null;
+    if (tx.date) {
+      const parts = tx.date.split('-');
+      if (parts.length === 3) {
+        txDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      } else {
+        txDate = new Date(tx.date);
+      }
+    } else if (tx.dateLabel) {
+      const match = tx.dateLabel.match(/([A-Za-z]+)\s*(\d{1,2})/);
+      if (match) {
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthIndex = monthNames.findIndex((m) => match[1].toLowerCase().startsWith(m));
+        if (monthIndex >= 0) {
+          txDate = new Date(2026, monthIndex, parseInt(match[2], 10));
+        }
+      }
+    }
+
+    if (!txDate || isNaN(txDate.getTime())) {
+      groupsMap.get('earlier')!.transactions.push(tx);
+      continue;
+    }
+
+    const txMidnight = new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate()).getTime();
+    const diffDays = Math.round((refMidnight - txMidnight) / (24 * 60 * 60 * 1000));
+
+    if (diffDays === 0) {
+      groupsMap.get('today')!.transactions.push(tx);
+    } else if (diffDays === 1) {
+      groupsMap.get('yesterday')!.transactions.push(tx);
+    } else {
+      groupsMap.get('earlier')!.transactions.push(tx);
+    }
+  }
+
+  return Array.from(groupsMap.values()).filter((g) => g.transactions.length > 0);
+}

@@ -45,6 +45,7 @@ export interface DemoTransaction {
   id: string;
   merchant: string;
   category: string;
+  date?: string; // ISO calendar date e.g. '2026-10-29'
   dateLabel: string;
   amountMinor: number; // signed cents (+ for income, - for expense)
   currency: string;
@@ -173,12 +174,13 @@ export const DASHBOARD_DEMO_DATA: DashboardDemoData = {
     ],
   },
   recentTransactions: {
-    title: 'Recent transactions',
+    title: 'Your activity',
     transactions: [
       {
         id: 'tx-carrefour',
         merchant: 'Carrefour',
         category: 'Groceries',
+        date: '2026-10-29',
         dateLabel: 'Oct 29',
         amountMinor: -5280, // -€52.80
         currency: 'EUR',
@@ -189,16 +191,18 @@ export const DASHBOARD_DEMO_DATA: DashboardDemoData = {
         id: 'tx-spotify',
         merchant: 'Spotify',
         category: 'Subscription',
+        date: '2026-10-28',
         dateLabel: 'Oct 28',
         amountMinor: -1099, // -€10.99
         currency: 'EUR',
         iconName: 'music',
-        iconBg: '#F0ECF5',
+        iconBg: '#F4F0F8',
       },
       {
         id: 'tx-salary',
         merchant: 'Salary',
         category: 'Income',
+        date: '2026-10-25',
         dateLabel: 'Oct 25',
         amountMinor: 285000, // +€2,850.00
         currency: 'EUR',
@@ -209,11 +213,12 @@ export const DASHBOARD_DEMO_DATA: DashboardDemoData = {
         id: 'tx-netflix',
         merchant: 'Netflix',
         category: 'Subscription',
+        date: '2026-10-23',
         dateLabel: 'Oct 23',
         amountMinor: -1349, // -€13.49
         currency: 'EUR',
         iconName: 'play',
-        iconBg: '#F0ECF5',
+        iconBg: '#F4F0F8',
       },
     ],
   },
