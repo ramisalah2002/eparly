@@ -1,6 +1,8 @@
 package com.eparly.api.catalogsync.orchestration;
 
+import com.eparly.api.catalogsync.api.CatalogConnectorResponse;
 import com.eparly.api.catalogsync.api.CatalogSyncCandidateResponse;
+import com.eparly.api.catalogsync.connector.CatalogConnectorRegistry;
 import com.eparly.api.catalogsync.api.CatalogSyncPermissionRequest;
 import com.eparly.api.catalogsync.api.CatalogSyncSourceCreateRequest;
 import com.eparly.api.catalogsync.api.CatalogSyncSourceResponse;
@@ -34,10 +36,14 @@ public class CatalogSyncAdminService {
     private final CommercialOfferRepository offerRepository;
     private final OfferAvailabilityService availabilityService;
 
+    private final CatalogConnectorRegistry connectors;
+
     public CatalogSyncAdminService(JdbcTemplate jdbc, CatalogSyncRepository repository,
                                    CatalogSyncJobService jobService, SourceTrustPolicy trustPolicy,
                                    ObjectMapper objectMapper, CommercialOfferRepository offerRepository,
-                                   OfferAvailabilityService availabilityService) {
+                                   OfferAvailabilityService availabilityService,
+                                   CatalogConnectorRegistry connectors) {
+        this.connectors = connectors;
         this.jdbc = jdbc;
         this.repository = repository;
         this.jobService = jobService;
@@ -58,15 +64,20 @@ public class CatalogSyncAdminService {
                 false, "PENDING", null, null, request.extractorConfig());
         trustPolicy.validate(validationSource, url);
         String config = normalizeConfig(request.extractorConfig());
+        String connectorKey = request.connectorKey() == null || request.connectorKey().isBlank()
+                ? null : request.connectorKey().trim();
+        if (connectorKey != null && !connectors.isKnown(connectorKey)) {
+            throw new IllegalArgumentException("Unknown catalog connector");
+        }
 
         UUID id = jdbc.queryForObject("""
                 INSERT INTO catalog_sync_sources
                     (provider_id, source_name, official_domain, source_url, source_type,
-                     sector, country, extractor_config)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb))
+                     sector, country, extractor_config, connector_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?)
                 RETURNING id
                 """, UUID.class, request.providerId(), request.sourceName().trim(), domain, url,
-                request.sourceType().name(), request.sector().name(), country, config);
+                request.sourceType().name(), request.sector().name(), country, config, connectorKey);
         audit(actorId, "SOURCE_CREATED", "CATALOG_SYNC_SOURCE", id,
                 "{\"permissionStatus\":\"PENDING\",\"collectionEnabled\":false}");
         return findSource(id);
@@ -98,7 +109,7 @@ public class CatalogSyncAdminService {
         return jdbc.query("""
                 SELECT id, provider_id, source_name, official_domain, source_url, source_type, sector,
                        country, collection_enabled, permission_status, permission_reason, robots_status,
-                       last_checked_at, last_success_at, last_error
+                       last_checked_at, last_success_at, last_error, connector_key
                 FROM catalog_sync_sources ORDER BY source_name, id
                 """, (rs, row) -> new CatalogSyncSourceResponse(
                 rs.getObject("id", UUID.class), rs.getObject("provider_id", UUID.class),
@@ -107,12 +118,23 @@ public class CatalogSyncAdminService {
                 rs.getBoolean("collection_enabled"), rs.getString("permission_status"),
                 rs.getString("permission_reason"), rs.getString("robots_status"),
                 instant(rs.getTimestamp("last_checked_at")), instant(rs.getTimestamp("last_success_at")),
-                rs.getString("last_error")));
+                rs.getString("last_error"), rs.getString("connector_key")));
+    }
+
+    public List<CatalogConnectorResponse> connectors() {
+        return connectors.all().stream().map(connector -> {
+            var readiness = connector.readiness();
+            return new CatalogConnectorResponse(connector.key(), readiness.ready(), readiness.reason());
+        }).toList();
+    }
+
+    public List<com.eparly.api.catalogsync.domain.CatalogSyncSourceReport> runSources(UUID runId) {
+        return jobService.runSources(runId);
     }
 
     public List<CatalogSyncCandidateResponse> candidates(String status, int limit) {
         String candidateStatus = status == null || status.isBlank() ? "NEEDS_REVIEW" : status.toUpperCase(Locale.ROOT);
-        if (!List.of("NEEDS_REVIEW", "ACCEPTED", "REJECTED", "SUPERSEDED").contains(candidateStatus)) {
+        if (!List.of("NEEDS_REVIEW", "ACCEPTED", "REJECTED", "SUPERSEDED", "DRAFT_CREATED").contains(candidateStatus)) {
             throw new IllegalArgumentException("Unsupported catalog candidate status");
         }
         int boundedLimit = Math.max(1, Math.min(100, limit));
@@ -193,7 +215,7 @@ public class CatalogSyncAdminService {
         return jdbc.query("""
                 SELECT id, provider_id, source_name, official_domain, source_url, source_type, sector,
                        country, collection_enabled, permission_status, permission_reason, robots_status,
-                       last_checked_at, last_success_at, last_error
+                       last_checked_at, last_success_at, last_error, connector_key
                 FROM catalog_sync_sources WHERE id = ?
                 """, rs -> {
             if (!rs.next()) throw new IllegalArgumentException("Catalog sync source not found");
@@ -204,7 +226,7 @@ public class CatalogSyncAdminService {
                     rs.getBoolean("collection_enabled"), rs.getString("permission_status"),
                     rs.getString("permission_reason"), rs.getString("robots_status"),
                     instant(rs.getTimestamp("last_checked_at")), instant(rs.getTimestamp("last_success_at")),
-                    rs.getString("last_error"));
+                    rs.getString("last_error"), rs.getString("connector_key"));
         }, id);
     }
 

@@ -7,7 +7,7 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "eparly.catalog-sync")
 public class CatalogSyncProperties {
     private boolean enabled;
-    private String cron = "0 0 4 * * *";
+    private String cron = "0 0 3 * * *";
     private String zone = "Europe/Paris";
     private String userAgent = "EparlyCatalogBot/1.0";
     private String contact = "";
@@ -20,7 +20,46 @@ public class CatalogSyncProperties {
     private int maxRedirects = 3;
     private int maxRetries = 2;
     private boolean allowLoopbackForTests;
+    private boolean businessIngestionEnabled;
+    private boolean catchUpOnStartup;
+    private Duration failureRetryDelay = Duration.ofMinutes(30);
+    private int maxParallelSources = 2;
+    private int circuitBreakerFailureThreshold = 5;
+    private Duration circuitBreakerCooldown = Duration.ofDays(1);
+    private int maxRawPayloadBytes = 8192;
+    private final Tradedoubler tradedoubler = new Tradedoubler();
 
+    /** Le jeton provient exclusivement de l'environnement ; il n'est jamais persiste ni journalise. */
+    public static class Tradedoubler {
+        private boolean enabled;
+        private String token = "";
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getToken() { return token; }
+        public void setToken(String token) { this.token = token; }
+
+        @Override
+        public String toString() {
+            return "Tradedoubler{enabled=" + enabled + "}";
+        }
+    }
+
+    public boolean isBusinessIngestionEnabled() { return businessIngestionEnabled; }
+    public void setBusinessIngestionEnabled(boolean value) { this.businessIngestionEnabled = value; }
+    public boolean isCatchUpOnStartup() { return catchUpOnStartup; }
+    public void setCatchUpOnStartup(boolean value) { this.catchUpOnStartup = value; }
+    public Duration getFailureRetryDelay() { return failureRetryDelay; }
+    public void setFailureRetryDelay(Duration value) { this.failureRetryDelay = value; }
+    public int getMaxParallelSources() { return maxParallelSources; }
+    public void setMaxParallelSources(int maxParallelSources) { this.maxParallelSources = maxParallelSources; }
+    public int getCircuitBreakerFailureThreshold() { return circuitBreakerFailureThreshold; }
+    public void setCircuitBreakerFailureThreshold(int threshold) { this.circuitBreakerFailureThreshold = threshold; }
+    public Duration getCircuitBreakerCooldown() { return circuitBreakerCooldown; }
+    public void setCircuitBreakerCooldown(Duration cooldown) { this.circuitBreakerCooldown = cooldown; }
+    public int getMaxRawPayloadBytes() { return maxRawPayloadBytes; }
+    public void setMaxRawPayloadBytes(int maxRawPayloadBytes) { this.maxRawPayloadBytes = maxRawPayloadBytes; }
+    public Tradedoubler getTradedoubler() { return tradedoubler; }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getCron() { return cron; }

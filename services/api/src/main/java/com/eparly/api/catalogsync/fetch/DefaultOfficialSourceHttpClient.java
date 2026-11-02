@@ -4,6 +4,7 @@ import com.eparly.api.catalogsync.CatalogSyncProperties;
 import com.eparly.api.catalogsync.domain.CatalogSyncSource;
 import com.eparly.api.catalogsync.validation.SourceTrustPolicy;
 import jakarta.annotation.PreDestroy;
+import org.apache.hc.client5.http.ConnectTimeoutException;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -17,7 +18,9 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -83,7 +86,7 @@ public class DefaultOfficialSourceHttpClient implements OfficialSourceHttpClient
                 return new FetchResult(status, current, null, "", response.etag(), response.lastModified());
             }
             if (status < 200 || status >= 300) {
-                throw new IllegalStateException("Source returned HTTP " + status);
+                throw SourceFetchException.forStatus(status);
             }
             if (!acceptedContentType(response.contentType())) {
                 throw new IllegalStateException("Unsupported source content type");
@@ -101,7 +104,7 @@ public class DefaultOfficialSourceHttpClient implements OfficialSourceHttpClient
                 HttpGet request = new HttpGet(uri);
                 request.setHeader("User-Agent", userAgent());
                 request.setHeader("Accept",
-                        "application/json, application/ld+json, text/html, application/xml, text/xml");
+                        "application/json, application/ld+json, text/html, application/xml, text/xml, text/csv");
                 if (etag != null && uri.toString().equals(source.sourceUrl())) {
                     request.setHeader("If-None-Match", etag);
                 }
@@ -131,8 +134,26 @@ public class DefaultOfficialSourceHttpClient implements OfficialSourceHttpClient
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Interrupted while fetching an authorized source", exception);
+            } catch (UnknownHostException exception) {
+                // Inclut les refus du resolveur epingle (SSRF) : une nouvelle tentative serait inutile.
+                throw new SourceFetchException(SourceFetchException.Code.NETWORK_ERROR,
+                        "Authorized source could not be fetched", exception);
             } catch (IOException exception) {
-                throw new IllegalStateException("Authorized source could not be fetched", exception);
+                if (attempt < properties.getMaxRetries()) {
+                    try {
+                        sleep(retryDelay(null, attempt));
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Interrupted while fetching an authorized source", interrupted);
+                    }
+                    continue;
+                }
+                boolean timeout = exception instanceof SocketTimeoutException
+                        || exception instanceof ConnectTimeoutException;
+                throw new SourceFetchException(timeout ? SourceFetchException.Code.TIMEOUT
+                        : SourceFetchException.Code.NETWORK_ERROR,
+                        timeout ? "Authorized source timed out" : "Authorized source could not be fetched",
+                        exception);
             }
         }
     }
@@ -195,7 +216,8 @@ public class DefaultOfficialSourceHttpClient implements OfficialSourceHttpClient
         return type.equals("application/json") || type.equals("application/ld+json")
                 || type.equals("text/html") || type.equals("application/xhtml+xml")
                 || type.equals("application/xml") || type.equals("text/xml")
-                || type.equals("text/plain");
+                || type.equals("text/plain")
+                || type.equals("text/csv") || type.equals("application/csv");
     }
 
     private static String header(CloseableHttpResponse response, String name) {

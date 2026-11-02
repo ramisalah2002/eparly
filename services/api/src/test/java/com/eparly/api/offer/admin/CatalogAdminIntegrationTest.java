@@ -62,9 +62,14 @@ class CatalogAdminIntegrationTest {
 
         mockMvc.perform(get("/v1/admin/catalog/providers"))
                 .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v1/admin/catalog/providers/{id}", UUID.randomUUID()))
+                .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/v1/admin/catalog-sync/sources"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/v1/admin/catalog/providers")
+                        .header(HttpHeaders.AUTHORIZATION, forgedRoleToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/v1/admin/catalog/providers/{id}", UUID.randomUUID())
                         .header(HttpHeaders.AUTHORIZATION, forgedRoleToken))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/v1/admin/catalog-sync/sources")
@@ -141,6 +146,16 @@ class CatalogAdminIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
         String providerId = provider.get("id").asText();
+
+        mockMvc.perform(get("/v1/admin/catalog/providers/{id}", providerId)
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(providerId))
+                .andExpect(jsonPath("$.name").value("Admin test provider"));
+        mockMvc.perform(get("/v1/admin/catalog/providers/{id}/audit", providerId)
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].action").value("PROVIDER_CREATED"));
 
         JsonNode draft = response(mockMvc.perform(post("/v1/admin/catalog/offers")
                         .header(HttpHeaders.AUTHORIZATION, token)
@@ -364,6 +379,83 @@ class CatalogAdminIntegrationTest {
         mockMvc.perform(get("/v1/offers/{id}", alternative.get("id").asText())
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void providerDetailsUpdatesValidationConflictsAndAuditUseTheAdminApi() throws Exception {
+        User administrator = createActiveUser();
+        grantAdministrator(administrator.getId());
+        String token = bearer(administrator, false);
+        String unique = UUID.randomUUID().toString().substring(0, 8);
+        String name = "Provider CRUD " + unique;
+
+        JsonNode created = response(mockMvc.perform(post("/v1/admin/catalog/providers")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"%s","sector":"STREAMING",
+                                 "officialWebsite":"https://provider-%s.example","country":"FR"}
+                                """.formatted(name, unique)))
+                .andExpect(status().isCreated())
+                .andReturn());
+        String providerId = created.get("id").asText();
+
+        mockMvc.perform(get("/v1/admin/catalog/providers/{id}", providerId)
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value(name))
+                .andExpect(jsonPath("$.version").value(0));
+
+        JsonNode updated = response(mockMvc.perform(patch("/v1/admin/catalog/providers/{id}", providerId)
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":0,"name":"%s updated",
+                                 "officialWebsite":"https://updated-%s.example","country":"BE"}
+                                """.formatted(name, unique)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value(name + " updated"))
+                .andExpect(jsonPath("$.country").value("BE"))
+                .andReturn());
+
+        mockMvc.perform(patch("/v1/admin/catalog/providers/{id}", providerId)
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":0,"name":"Stale update"}
+                                """))
+                .andExpect(status().isConflict());
+        mockMvc.perform(patch("/v1/admin/catalog/providers/{id}", providerId)
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":%s,"officialWebsite":"http://not-secure.example"}
+                                """.formatted(updated.get("version").asText())))
+                .andExpect(status().isBadRequest());
+
+        JsonNode duplicate = response(mockMvc.perform(post("/v1/admin/catalog/providers")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"%s duplicate","sector":"STREAMING",
+                                 "officialWebsite":"https://duplicate-%s.example","country":"FR"}
+                                """.formatted(name, unique)))
+                .andExpect(status().isCreated())
+                .andReturn());
+        mockMvc.perform(patch("/v1/admin/catalog/providers/{id}", duplicate.get("id").asText())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":0,"name":"%s updated"}
+                                """.formatted(name)))
+                .andExpect(status().isConflict());
+
+        JsonNode providerAudit = response(mockMvc.perform(get(
+                                "/v1/admin/catalog/providers/{id}/audit", providerId)
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(providerAudit.toString()).contains("PROVIDER_CREATED", "PROVIDER_UPDATED");
     }
 
     private JsonNode createAndPublishAlternative(String token, String providerId) throws Exception {

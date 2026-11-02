@@ -16,6 +16,17 @@ public record CatalogSyncReport(
         int offersUpdated,
         int offersUnchanged,
         int offersRejected,
-        int errorsCount
+        int errorsCount,
+        Long durationMillis,
+        int sourcesFailed,
+        int sourcesSkipped,
+        int sourcesNotModified,
+        int offersCollected,
+        int offersDuplicates,
+        int offersNotReturned,
+        int providersCreated,
+        int catalogOffersCreated,
+        int catalogPricesChanged,
+        int catalogEvidenceAdded
 ) {
 }

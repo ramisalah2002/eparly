@@ -70,6 +70,12 @@ public class CatalogAdminController {
         return service.listProviders(page, size);
     }
 
+    @GetMapping("/providers/{providerId}")
+    @Operation(summary = "Consulter un fournisseur")
+    public OfferProviderResponse getProvider(@PathVariable UUID providerId) {
+        return service.getProvider(providerId);
+    }
+
     @PatchMapping("/providers/{providerId}")
     @Operation(summary = "Modifier ou désactiver un fournisseur")
     public OfferProviderResponse patchProvider(

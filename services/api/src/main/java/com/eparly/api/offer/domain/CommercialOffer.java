@@ -48,6 +48,10 @@ public class CommercialOffer {
     @Column(name = "characteristics", columnDefinition = "text")
     private String characteristics;
 
+    /** Ecrite par le batch seul ; une offre de reference ne peut pas etre publiee (contrainte V25). */
+    @Column(name = "reference_kind", insertable = false, updatable = false)
+    private String referenceKind;
+
     @Column(name = "eligibility_conditions", columnDefinition = "text")
     private String eligibilityConditions;
 
@@ -108,6 +112,7 @@ public class CommercialOffer {
     public OfferSector getSector() { return sector; }
     public void setSector(OfferSector sector) { this.sector = sector; }
 
+    public String getReferenceKind() { return referenceKind; }
     public String getCharacteristics() { return characteristics; }
     public void setCharacteristics(String characteristics) { this.characteristics = characteristics; }
 

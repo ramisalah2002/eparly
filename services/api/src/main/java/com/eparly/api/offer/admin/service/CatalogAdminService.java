@@ -112,6 +112,12 @@ public class CatalogAdminService {
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
+    public OfferProviderResponse getProvider(UUID providerId) {
+        OfferProvider provider = providerRepository.findById(providerId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Provider not found"));
+        return providerResponse(provider);
+    }
+
     @Transactional
     public OfferProviderResponse patchProvider(UUID actorId, UUID providerId, ProviderPatchRequest request) {
         OfferProvider provider = providerRepository.findById(providerId)
@@ -371,6 +377,9 @@ public class CatalogAdminService {
     @Transactional
     public CommercialOfferResponse publish(UUID actorId, UUID offerId) {
         CommercialOffer offer = requireOffer(offerId);
+        if (offer.getReferenceKind() != null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Reference tariffs cannot be published as offers");
+        }
         OfferPricing pricing = pricingRepository.findByOfferId(offerId)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Publication requires pricing"));
         if (!availabilityService.isReliablePricing(pricing)) {

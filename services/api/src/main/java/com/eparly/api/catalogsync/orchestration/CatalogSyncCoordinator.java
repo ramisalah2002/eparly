@@ -1,18 +1,18 @@
 package com.eparly.api.catalogsync.orchestration;
 
 import com.eparly.api.catalogsync.CatalogSyncProperties;
-import com.eparly.api.catalogsync.discovery.SitemapDiscoveryService;
-import com.eparly.api.catalogsync.domain.CatalogObservationStatus;
-import com.eparly.api.catalogsync.domain.CatalogSourceType;
+import com.eparly.api.catalogsync.connector.CatalogConnectorRegistry;
+import com.eparly.api.catalogsync.connector.CatalogSourceConnector;
+import com.eparly.api.catalogsync.connector.CollectedSourceBatch;
+import com.eparly.api.catalogsync.connector.CollectionBudget;
 import com.eparly.api.catalogsync.domain.CatalogSyncSource;
-import com.eparly.api.catalogsync.extraction.HtmlCatalogOfferExtractor;
-import com.eparly.api.catalogsync.extraction.JsonCatalogOfferExtractor;
 import com.eparly.api.catalogsync.extraction.RawCatalogOffer;
-import com.eparly.api.catalogsync.fetch.FetchResult;
-import com.eparly.api.catalogsync.fetch.OfficialSourceHttpClient;
 import com.eparly.api.catalogsync.fetch.RobotsPolicyService;
+import com.eparly.api.catalogsync.fetch.SourceFetchException;
+import com.eparly.api.catalogsync.normalization.CatalogDeduplicationService;
 import com.eparly.api.catalogsync.normalization.NormalizedCatalogOffer;
 import com.eparly.api.catalogsync.normalization.OfferNormalizationService;
+import com.eparly.api.catalogsync.persistence.CatalogBusinessIngestionService;
 import com.eparly.api.catalogsync.persistence.CatalogSyncRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,10 +22,15 @@ import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -33,29 +38,26 @@ public class CatalogSyncCoordinator {
     private static final Logger log = LoggerFactory.getLogger(CatalogSyncCoordinator.class);
 
     private final CatalogSyncRepository repository;
-    private final OfficialSourceHttpClient httpClient;
+    private final CatalogBusinessIngestionService ingestion;
+    private final CatalogConnectorRegistry connectors;
     private final RobotsPolicyService robotsPolicy;
-    private final SitemapDiscoveryService sitemapDiscovery;
-    private final JsonCatalogOfferExtractor jsonExtractor;
-    private final HtmlCatalogOfferExtractor htmlExtractor;
     private final OfferNormalizationService normalization;
+    private final CatalogDeduplicationService deduplication;
     private final CatalogSyncProperties properties;
     private final Clock clock;
     private final AtomicBoolean stopping = new AtomicBoolean();
 
-    public CatalogSyncCoordinator(CatalogSyncRepository repository, OfficialSourceHttpClient httpClient,
-                                  RobotsPolicyService robotsPolicy, SitemapDiscoveryService sitemapDiscovery,
-                                  JsonCatalogOfferExtractor jsonExtractor,
-                                  HtmlCatalogOfferExtractor htmlExtractor,
-                                  OfferNormalizationService normalization,
+    public CatalogSyncCoordinator(CatalogSyncRepository repository, CatalogBusinessIngestionService ingestion,
+                                  CatalogConnectorRegistry connectors,
+                                  RobotsPolicyService robotsPolicy, OfferNormalizationService normalization,
+                                  CatalogDeduplicationService deduplication,
                                   CatalogSyncProperties properties, Clock clock) {
         this.repository = repository;
-        this.httpClient = httpClient;
+        this.ingestion = ingestion;
+        this.connectors = connectors;
         this.robotsPolicy = robotsPolicy;
-        this.sitemapDiscovery = sitemapDiscovery;
-        this.jsonExtractor = jsonExtractor;
-        this.htmlExtractor = htmlExtractor;
         this.normalization = normalization;
+        this.deduplication = deduplication;
         this.properties = properties;
         this.clock = clock;
         if (properties.getMaxExecutionDuration() == null
@@ -65,32 +67,25 @@ public class CatalogSyncCoordinator {
         }
     }
 
-    public CatalogSyncRepository.SyncCounters collect(List<CatalogSyncSource> sources,
+    public CatalogSyncRepository.SyncCounters collect(List<CatalogSyncSource> sources, UUID runId,
                                                        Map<String, String> sourceErrors) {
         robotsPolicy.beginRun();
         CatalogSyncRepository.SyncCounters counters = new CatalogSyncRepository.SyncCounters();
-        long deadlineNanos = System.nanoTime() + properties.getMaxExecutionDuration().toNanos();
-        for (CatalogSyncSource source : sources) {
-            if (stopping.get()) break;
-            if (deadlineReached(deadlineNanos)) {
-                counters.errorsCount++;
-                sourceErrors.put("run", "Maximum catalog sync execution duration reached");
-                break;
+        if (sources.isEmpty()) return counters;
+        CollectionBudget budget = new CollectionBudget(
+                System.nanoTime() + properties.getMaxExecutionDuration().toNanos(), stopping::get);
+        int parallelism = Math.max(1, Math.min(properties.getMaxParallelSources(), sources.size()));
+        ExecutorService executor = Executors.newFixedThreadPool(parallelism);
+        try {
+            List<Future<SourceOutcome>> outcomes = new ArrayList<>();
+            for (CatalogSyncSource source : sources) {
+                outcomes.add(executor.submit(() -> collectSource(source, runId, budget)));
             }
-            counters.sourcesProcessed++;
-            try {
-                FetchResult root = processSource(source, counters, deadlineNanos);
-                if (root != null) {
-                    repository.markSourceSuccess(source, root.etag(), root.lastModified(), clock.instant());
-                }
-            } catch (RuntimeException exception) {
-                counters.errorsCount++;
-                String safeMessage = safeError(exception);
-                sourceErrors.put(source.id().toString(), safeMessage);
-                repository.markSourceError(source.id(), safeMessage, clock.instant());
-                log.warn("Catalog sync source {} failed: {}", source.id(), safeMessage);
-                if (exception instanceof RunDeadlineExceededException) break;
+            for (int index = 0; index < outcomes.size(); index++) {
+                merge(outcomes.get(index), sources.get(index), counters, sourceErrors);
             }
+        } finally {
+            executor.shutdown();
         }
         return counters;
     }
@@ -100,131 +95,176 @@ public class CatalogSyncCoordinator {
         stopping.set(true);
     }
 
-    private FetchResult processSource(CatalogSyncSource source, CatalogSyncRepository.SyncCounters counters,
-                                      long deadlineNanos) {
-        ensureBeforeDeadline(deadlineNanos);
-        boolean robotsAllowed;
+    private static void merge(Future<SourceOutcome> future, CatalogSyncSource source,
+                              CatalogSyncRepository.SyncCounters counters, Map<String, String> sourceErrors) {
         try {
-            robotsAllowed = robotsPolicy.isAllowed(source, source.sourceUrl());
+            SourceOutcome outcome = future.get();
+            counters.add(outcome.counters());
+            if (outcome.deadlineReached()) {
+                if (sourceErrors.putIfAbsent("run", "Maximum catalog sync execution duration reached") == null) {
+                    counters.errorsCount++;
+                }
+            } else if (outcome.error() != null) {
+                sourceErrors.put(source.id().toString(), outcome.error());
+            }
+        } catch (ExecutionException exception) {
+            counters.errorsCount++;
+            counters.sourcesFailed++;
+            sourceErrors.put(source.id().toString(), safeError(exception.getCause()));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while collecting catalog sources", exception);
+        }
+    }
+
+    /** Toute erreur reste attachee a la source : les autres sources poursuivent leur collecte. */
+    private SourceOutcome collectSource(CatalogSyncSource source, UUID runId, CollectionBudget budget) {
+        CatalogSyncRepository.SyncCounters counters = new CatalogSyncRepository.SyncCounters();
+        if (budget.stopping()) return new SourceOutcome(counters, null, false);
+        if (budget.deadlineReached()) return new SourceOutcome(counters, null, true);
+
+        Instant startedAt = clock.instant();
+        try {
+            if (repository.isCircuitOpen(source.id(), startedAt)) {
+                counters.sourcesSkipped++;
+                String message = "Source skipped: circuit breaker is open after repeated failures";
+                repository.saveRunSource(runId, source.id(), "SKIPPED_CIRCUIT_OPEN", startedAt, clock.instant(),
+                        counters, "CIRCUIT_OPEN", message);
+                return new SourceOutcome(counters, message, false);
+            }
+            CatalogSourceConnector connector = connectors.connectorFor(source);
+            CatalogSourceConnector.Readiness readiness = connector.readiness();
+            if (!readiness.ready()) {
+                counters.sourcesSkipped++;
+                repository.saveRunSource(runId, source.id(), "SKIPPED_NOT_CONFIGURED", startedAt, clock.instant(),
+                        counters, "NOT_CONFIGURED", readiness.reason());
+                return new SourceOutcome(counters, null, false);
+            }
+
+            counters.sourcesProcessed++;
+            if (!robotsAllowed(source)) {
+                counters.sourcesSkipped++;
+                repository.saveRunSource(runId, source.id(), "SKIPPED_ROBOTS", startedAt, clock.instant(),
+                        counters, null, null);
+                return new SourceOutcome(counters, null, false);
+            }
+            budget.ensureBeforeDeadline();
+            CollectedSourceBatch batch = connector.collect(source, budget);
+            persist(source, connector, batch, runId, counters, budget);
+            repository.markSourceSuccess(source, batch.etag(), batch.lastModified(), clock.instant());
+            counters.sourcesSucceeded++;
+            if (batch.notModified()) counters.sourcesNotModified++;
+            repository.saveRunSource(runId, source.id(), batch.notModified() ? "NOT_MODIFIED" : "SUCCESS",
+                    startedAt, clock.instant(), counters, null, null);
+            return new SourceOutcome(counters, null, false);
+        } catch (CollectionBudget.RunDeadlineExceededException exception) {
+            return failed(source, runId, counters, exception, startedAt, true);
+        } catch (RuntimeException exception) {
+            return failed(source, runId, counters, exception, startedAt, false);
+        }
+    }
+
+    private SourceOutcome failed(CatalogSyncSource source, UUID runId, CatalogSyncRepository.SyncCounters counters,
+                                 RuntimeException exception, Instant startedAt, boolean deadline) {
+        counters.errorsCount += deadline ? 0 : 1;
+        counters.sourcesFailed++;
+        String safeMessage = safeError(exception);
+        repository.markSourceError(source.id(), safeMessage, clock.instant());
+        repository.saveRunSource(runId, source.id(), "FAILED", startedAt, clock.instant(), counters,
+                errorCode(exception), safeMessage);
+        log.warn("Catalog sync source {} failed: code={} message={}", source.id(), errorCode(exception), safeMessage);
+        return new SourceOutcome(counters, safeMessage, deadline);
+    }
+
+    private boolean robotsAllowed(CatalogSyncSource source) {
+        boolean allowed;
+        try {
+            allowed = robotsPolicy.isAllowed(source, source.sourceUrl());
         } catch (RuntimeException exception) {
             repository.updateSourceRobotsStatus(source.id(), "ERROR", clock.instant());
             throw exception;
         }
-        if (!robotsAllowed) {
-            repository.updateSourceRobotsStatus(source.id(), "DISALLOWED", clock.instant());
-            return null;
+        repository.updateSourceRobotsStatus(source.id(), allowed ? "ALLOWED" : "DISALLOWED", clock.instant());
+        return allowed;
+    }
+
+    private void persist(CatalogSyncSource source, CatalogSourceConnector connector, CollectedSourceBatch batch,
+                         UUID runId, CatalogSyncRepository.SyncCounters counters, CollectionBudget budget) {
+        counters.pagesFetched += batch.pagesFetched();
+        for (String url : batch.unsupportedPages()) {
+            NormalizedCatalogOffer page = normalization.unsupportedPage(url, source.officialDomain(), source.sector());
+            repository.saveObservation(source, page, null, runId, clock.instant());
+            counters.pagesUnsupported++;
         }
-        repository.updateSourceRobotsStatus(source.id(), "ALLOWED", clock.instant());
-        ensureBeforeDeadline(deadlineNanos);
-        FetchResult root = httpClient.fetch(source, source.sourceUrl(), source.etag(), source.lastModified());
-        if (root.notModified()) {
-            return root;
-        }
-        counters.pagesFetched++;
-        List<RawCatalogOffer> offers;
-        if (source.sourceType() == CatalogSourceType.SITEMAP) {
-            offers = collectSitemapPages(source, root.body(), counters, deadlineNanos);
-        } else {
-            offers = extract(source, root.body(), root.finalUri().toString());
-            if (offers.isEmpty() && (source.sourceType() == CatalogSourceType.JSON_LD
-                    || source.sourceType() == CatalogSourceType.HTML_PAGE)) {
-                persistUnsupportedPage(source, root.finalUri().toString(), counters);
+
+        List<String> offerDomains = connector.offerDomains(source);
+        Set<String> seenKeys = new HashSet<>();
+        boolean fullyPersisted = true;
+        for (RawCatalogOffer raw : batch.offers()) {
+            if (budget.stopping()) {
+                fullyPersisted = false;
+                break;
             }
-        }
-        for (RawCatalogOffer raw : offers) {
-            if (stopping.get()) break;
-            ensureBeforeDeadline(deadlineNanos);
-            NormalizedCatalogOffer normalized = normalization.normalize(raw, source.officialDomain());
-            CatalogSyncRepository.ObservationResult saved =
-                    repository.saveObservation(source, normalized, clock.instant());
-            if (!saved.newObservation()) {
-                counters.offersUnchanged++;
-            } else if (saved.rejected()) {
+            budget.ensureBeforeDeadline();
+            counters.offersCollected++;
+            NormalizedCatalogOffer normalized = normalization.normalize(raw, offerDomains);
+            if (!seenKeys.add(normalized.externalKey())) {
+                counters.offersDuplicates++;
+                continue;
+            }
+            try {
+                var identity = deduplication.identify(normalized, source.officialDomain());
+                var saved = ingestion.ingest(source, normalized, identity, runId, clock.instant());
+                record(saved.observation(), counters);
+                counters.providersCreated += saved.providersCreated();
+                counters.catalogOffersCreated += saved.offersCreated();
+                counters.catalogPricesChanged += saved.pricesChanged();
+                counters.catalogEvidenceAdded += saved.evidenceAdded();
+            } catch (org.springframework.dao.DataAccessException exception) {
+                // Une ligne inexploitable n'interrompt pas la source, mais rend sa lecture incomplete.
                 counters.offersRejected++;
-            } else if (saved.knownBefore()) {
-                counters.offersUpdated++;
-            } else {
-                counters.offersDiscovered++;
+                counters.errorsCount++;
+                fullyPersisted = false;
+                log.warn("Catalog sync source {} could not persist an offer: {}", source.id(),
+                        exception.getClass().getSimpleName());
             }
         }
-        return root;
-    }
-
-    private List<RawCatalogOffer> collectSitemapPages(CatalogSyncSource source, String sitemap,
-                                                      CatalogSyncRepository.SyncCounters counters,
-                                                      long deadlineNanos) {
-        List<String> urls = sitemapDiscovery.discover(sitemap, properties.getMaxPagesPerSource());
-        List<RawCatalogOffer> offers = new ArrayList<>();
-        for (String url : urls) {
-            if (stopping.get()) break;
-            ensureBeforeDeadline(deadlineNanos);
-            if (!robotsPolicy.isAllowed(source, url)) continue;
-            FetchResult page = httpClient.fetch(source, url, null, null);
-            if (page.notModified()) continue;
-            counters.pagesFetched++;
-            List<RawCatalogOffer> pageOffers = extractPage(source, page.body(), page.finalUri().toString());
-            if (pageOffers.isEmpty()) {
-                persistUnsupportedPage(source, page.finalUri().toString(), counters);
-            } else {
-                offers.addAll(pageOffers);
-            }
-        }
-        return offers;
-    }
-
-    private static void ensureBeforeDeadline(long deadlineNanos) {
-        if (deadlineReached(deadlineNanos)) throw new RunDeadlineExceededException();
-    }
-
-    private static boolean deadlineReached(long deadlineNanos) {
-        return System.nanoTime() - deadlineNanos >= 0;
-    }
-
-    private static final class RunDeadlineExceededException extends RuntimeException {
-        private RunDeadlineExceededException() {
-            super("Maximum catalog sync execution duration reached");
+        if (batch.complete() && fullyPersisted) {
+            counters.offersNotReturned += repository.markOffersNotReturned(source.id(), runId, clock.instant());
         }
     }
 
-    private List<RawCatalogOffer> extract(CatalogSyncSource source, String body, String finalUrl) {
-        return switch (source.sourceType()) {
-            case JSON_FEED, OFFICIAL_API -> jsonExtractor.extractFeed(body, source.sector(), finalUrl);
-            case CSV_FEED -> extractCsvFeed(source, body);
-            case JSON_LD -> extractPage(source, body, finalUrl);
-            case HTML_PAGE -> htmlExtractor.extract(body, finalUrl, source.extractorConfig(), source.sector());
-            case SITEMAP -> List.of();
-        };
-    }
-
-    private List<RawCatalogOffer> extractCsvFeed(CatalogSyncSource source, String body) {
-        throw new UnsupportedOperationException(
-                "CSV_FEED automatic collection is disabled for V1; manual catalog import is used instead");
-    }
-
-    private List<RawCatalogOffer> extractPage(CatalogSyncSource source, String body, String finalUrl) {
-        List<RawCatalogOffer> offers = new ArrayList<>(
-                jsonExtractor.extractJsonLd(body, source.sector(), finalUrl));
-        if (offers.isEmpty() && source.extractorConfig() != null
-                && !source.extractorConfig().isBlank()
-                && !source.extractorConfig().equals("{}")) {
-            offers.addAll(htmlExtractor.extract(body, finalUrl, source.extractorConfig(), source.sector()));
+    private static void record(CatalogSyncRepository.ObservationResult saved,
+                               CatalogSyncRepository.SyncCounters counters) {
+        if (!saved.newObservation()) {
+            counters.offersUnchanged++;
+        } else if (saved.rejected()) {
+            counters.offersRejected++;
+        } else if (saved.duplicate()) {
+            counters.offersDuplicates++;
+        } else if (saved.knownBefore()) {
+            counters.offersUpdated++;
+        } else {
+            counters.offersDiscovered++;
         }
-        return offers;
     }
 
-    private void persistUnsupportedPage(CatalogSyncSource source, String url,
-                                        CatalogSyncRepository.SyncCounters counters) {
-        NormalizedCatalogOffer observation = normalization.unsupportedPage(url, source.officialDomain(),
-                source.sector());
-        repository.saveObservation(source, observation, clock.instant());
-        counters.pagesUnsupported++;
+    private static String errorCode(RuntimeException exception) {
+        if (exception instanceof SourceFetchException fetch) return fetch.code().name();
+        if (exception instanceof CollectionBudget.RunDeadlineExceededException) return "RUN_DEADLINE";
+        if (exception instanceof UnsupportedOperationException) return "UNSUPPORTED_SOURCE";
+        if (exception instanceof IllegalArgumentException) return "INVALID_SOURCE_OR_DATA";
+        return "INTERNAL_ERROR";
     }
 
-    private static String safeError(RuntimeException exception) {
+    private static String safeError(Throwable exception) {
         String message = exception.getMessage() == null ? "" : exception.getMessage();
         message = message.replaceAll("https?://\\S+", "[source-url]");
         String result = exception.getClass().getSimpleName()
                 + (message.isBlank() ? "" : ": " + message);
         return result.length() > 900 ? result.substring(0, 900) : result;
+    }
+
+    private record SourceOutcome(CatalogSyncRepository.SyncCounters counters, String error, boolean deadlineReached) {
     }
 }

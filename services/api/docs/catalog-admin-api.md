@@ -55,6 +55,7 @@ paginées (`page=0`, `size=20`, taille plafonnée à 100).
 |---|---|
 | `POST /v1/admin/catalog/providers` | Créer un fournisseur actif |
 | `GET /v1/admin/catalog/providers?page=0&size=20` | Lister tous les fournisseurs |
+| `GET /v1/admin/catalog/providers/{id}` | Consulter un fournisseur, actif ou non |
 | `PATCH /v1/admin/catalog/providers/{id}` | Modifier fournisseur/statut, avec `expectedVersion` |
 | `GET /v1/admin/catalog/providers/{id}/audit` | Lire les actions visant un fournisseur |
 | `POST /v1/admin/catalog/offers` | Créer un brouillon |
@@ -69,6 +70,34 @@ paginées (`page=0`, `size=20`, taille plafonnée à 100).
 | `POST /v1/admin/catalog/offers/{id}/archive` | Archiver sans suppression physique |
 | `GET /v1/admin/catalog/offers/{id}/price-history` | Lire les snapshots tarifaires |
 | `GET /v1/admin/catalog/offers/{id}/audit` | Lire les actions visant l'offre |
+
+### Contrats fournisseurs
+
+`GET /v1/admin/catalog/providers?page=0&size=20` retourne un
+`AdminPageResponse<OfferProviderResponse>` (`items`, `page`, `size`,
+`totalElements`, `totalPages`). Le tri est alphabétique par nom. Cette route ne
+prend pas de filtre de nom ou de statut. `GET /providers/{id}` retourne le même
+`OfferProviderResponse` pour un fournisseur actif ou inactif. Les deux routes
+exigent `CATALOG_ADMIN` (`401` sans authentification, `403` sans permission,
+`404` pour un identifiant inconnu).
+
+La création accepte `name` (1–200 caractères), `sector` (`STREAMING`,
+`MOBILE_PLAN` ou `INTERNET_BOX`), `officialWebsite` (URL HTTPS, 1–500 caractères)
+et `country` (code de deux lettres, facultatif; `FR` par défaut). Le statut créé
+est `ACTIVE`. Le succès renvoie `201` avec un `OfferProviderResponse`;
+validation invalide renvoie `400` et doublon nom/secteur `409`.
+
+`PATCH /providers/{id}` accepte `expectedVersion` (obligatoire), ainsi que les
+champs modifiables `name`, `sector`, `country`, `officialWebsite` et `status`
+(`ACTIVE` ou `INACTIVE`). Les champs omis restent inchangés. Le succès renvoie
+`200` avec le fournisseur mis à jour; version périmée ou changement de secteur
+impossible lorsque des offres existent renvoie `409`, données invalides `400`,
+identifiant inconnu `404`. Toute modification effective est auditée. Les offres
+liées ne sont pas supprimées; les offres publiées peuvent être rendues `STALE`.
+Un fournisseur inactif n'est pas exposé dans le catalogue public.
+
+`GET /providers/{id}/audit` renvoie une liste de `CatalogAuditResponse`
+ordonnée par date décroissante; un fournisseur inconnu renvoie `404`.
 
 ### Création et modification
 
