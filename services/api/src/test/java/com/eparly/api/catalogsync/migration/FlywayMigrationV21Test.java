@@ -38,6 +38,7 @@ class FlywayMigrationV21Test {
             Flyway flyway = Flyway.configure()
                     .dataSource(jdbcUrl, username, password)
                     .locations("classpath:db/migration")
+                    .target("21")
                     .load();
 
             // This should succeed without errors
@@ -116,6 +117,7 @@ class FlywayMigrationV21Test {
             Flyway flywayV21 = Flyway.configure()
                     .dataSource(jdbcUrl, username, password)
                     .locations("classpath:db/migration")
+                    .target("21")
                     .load();
 
             flywayV21.migrate();
@@ -156,6 +158,7 @@ class FlywayMigrationV21Test {
             Flyway flyway = Flyway.configure()
                     .dataSource(jdbcUrl, username, password)
                     .locations("classpath:db/migration")
+                    .target("21")
                     .load();
 
             flyway.migrate();
@@ -201,6 +204,7 @@ class FlywayMigrationV21Test {
             Flyway flywayV21 = Flyway.configure()
                     .dataSource(jdbcUrl, username, password)
                     .locations("classpath:db/migration")
+                    .target("21")
                     .load();
 
             flywayV21.migrate();

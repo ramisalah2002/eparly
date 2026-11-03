@@ -2,8 +2,8 @@ package com.eparly.api.catalogsync.orchestration;
 
 import com.eparly.api.catalogsync.domain.CatalogSyncReport;
 import com.eparly.api.catalogsync.domain.CatalogSyncSource;
+import com.eparly.api.catalogsync.domain.CatalogSyncSourceReport;
 import com.eparly.api.catalogsync.persistence.CatalogSyncRepository;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -23,38 +23,41 @@ public class CatalogSyncJobService {
     private static final int LOCK_KEY = 1280922457;
 
     private final DataSource dataSource;
-    private final JdbcTemplate jdbc;
     private final CatalogSyncRepository repository;
     private final CatalogSyncCoordinator coordinator;
     private final Clock clock;
 
-    public CatalogSyncJobService(DataSource dataSource, JdbcTemplate jdbc, CatalogSyncRepository repository,
+    public CatalogSyncJobService(DataSource dataSource, CatalogSyncRepository repository,
                                  CatalogSyncCoordinator coordinator, Clock clock) {
         this.dataSource = dataSource;
-        this.jdbc = jdbc;
         this.repository = repository;
         this.coordinator = coordinator;
         this.clock = clock;
     }
 
     public CatalogSyncReport runNow() {
+        return runNow("manual");
+    }
+
+    public CatalogSyncReport runNow(String triggeredBy) {
         Instant attemptedAt = clock.instant();
         try (Connection lockConnection = dataSource.getConnection()) {
             if (!tryLock(lockConnection)) {
-                repository.recordSkippedRun(repository.countConfiguredSources(), attemptedAt);
+                int configured = repository.countConfiguredSources();
+                repository.recordSkippedRun(configured, attemptedAt);
                 return new CatalogSyncReport(null, attemptedAt, attemptedAt, "SKIPPED",
-                        repository.countConfiguredSources(), 0, 0, 0, 0, 0, 0, 0, 0);
+                        configured, 0, 0, 0, 0, 0, 0, 0, 0, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
             }
             try {
+                repository.failInterruptedRuns(attemptedAt);
                 List<CatalogSyncSource> sources = repository.findEligibleSources();
-                UUID runId = repository.startRun(sources.size());
+                UUID runId = repository.startRun(sources.size(), triggeredBy);
                 CatalogSyncRepository.SyncCounters counters = new CatalogSyncRepository.SyncCounters();
                 Map<String, String> errors = new LinkedHashMap<>();
-                String status = "SUCCEEDED";
+                String status = "SUCCESS";
                 try {
-                    counters = coordinator.collect(sources, errors);
-                    if (!errors.isEmpty()) status = counters.sourcesProcessed == 0
-                            || counters.errorsCount >= counters.sourcesProcessed ? "FAILED" : "PARTIAL_FAILURE";
+                    counters = coordinator.collect(sources, runId, errors);
+                    if (!errors.isEmpty()) status = counters.sourcesSucceeded > 0 ? "PARTIAL_SUCCESS" : "FAILED";
                 } catch (RuntimeException exception) {
                     status = "FAILED";
                     counters.errorsCount++;
@@ -63,7 +66,7 @@ public class CatalogSyncJobService {
                 } finally {
                     repository.finishRun(runId, status, counters, errors, clock.instant());
                 }
-                return report(runId);
+                return repository.findRun(runId);
             } finally {
                 unlock(lockConnection);
             }
@@ -77,19 +80,12 @@ public class CatalogSyncJobService {
         return repository.recentRuns(boundedLimit);
     }
 
-    private CatalogSyncReport report(UUID id) {
-        return jdbc.queryForObject("""
-                SELECT id, started_at, finished_at, status, sources_configured, sources_processed,
-                       pages_fetched, pages_unsupported, offers_discovered, offers_updated, offers_unchanged,
-                       offers_rejected, errors_count
-                FROM catalog_sync_runs WHERE id = ?
-                """, (rs, row) -> new CatalogSyncReport(
-                rs.getObject("id", UUID.class), rs.getTimestamp("started_at").toInstant(),
-                rs.getTimestamp("finished_at").toInstant(), rs.getString("status"),
-                rs.getInt("sources_configured"), rs.getInt("sources_processed"),
-                rs.getInt("pages_fetched"), rs.getInt("pages_unsupported"),
-                rs.getInt("offers_discovered"), rs.getInt("offers_updated"),
-                rs.getInt("offers_unchanged"), rs.getInt("offers_rejected"), rs.getInt("errors_count")), id);
+    public boolean succeededSince(Instant since) {
+        return repository.hasSuccessfulRunSince(since);
+    }
+
+    public List<CatalogSyncSourceReport> runSources(UUID runId) {
+        return repository.findRunSources(runId);
     }
 
     private static boolean tryLock(Connection connection) throws java.sql.SQLException {

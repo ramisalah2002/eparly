@@ -47,6 +47,8 @@ public class ImportService {
     private final ImportJobRecorder jobRecorder;
     private final ImportProperties properties;
 
+    private final com.eparly.api.subscription.service.CancellationService cancellationService;
+
     public ImportService(
             UserRepository userRepository,
             AccountRepository accountRepository,
@@ -54,7 +56,8 @@ public class ImportService {
             ImportPipeline pipeline,
             ImportPersistenceService persistenceService,
             ImportJobRecorder jobRecorder,
-            ImportProperties properties
+            ImportProperties properties,
+            com.eparly.api.subscription.service.CancellationService cancellationService
     ) {
         this.userRepository = userRepository;
         this.accountRepository = accountRepository;
@@ -63,6 +66,7 @@ public class ImportService {
         this.persistenceService = persistenceService;
         this.jobRecorder = jobRecorder;
         this.properties = properties;
+        this.cancellationService = cancellationService;
     }
 
     /** Previsualisation : lecture seule, aucune ecriture en base. */
@@ -144,6 +148,12 @@ public class ImportService {
 
         ImportJobResponse job = persistenceService.persist(command.userId(), account.getId(), computedHash,
                 analysis.totalRows(), analysis.candidates());
+        try {
+            cancellationService.recordSuspectCharges(command.userId());
+        } catch (RuntimeException exception) {
+            // L'import est deja valide : ce controle sera rejoue a la prochaine lecture des prelevements suspects.
+            log.warn("Post-cancellation check failed after import: {}", exception.getClass().getSimpleName());
+        }
         return new ImportResultResponse(job, cap(analysis.warnings(), properties.maxReportedIssues()));
     }
 

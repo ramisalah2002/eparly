@@ -9,6 +9,8 @@ import com.eparly.api.offer.admin.dto.EvidenceVerificationRequest;
 import com.eparly.api.offer.admin.dto.OfferDraftRequest;
 import com.eparly.api.offer.admin.dto.OfferPatchRequest;
 import com.eparly.api.offer.admin.dto.OfferPriceHistoryResponse;
+import com.eparly.api.offer.admin.dto.OfferReuseRightsRequest;
+import com.eparly.api.offer.admin.dto.OfferReuseRightsResponse;
 import com.eparly.api.offer.admin.dto.PricingUpsertRequest;
 import com.eparly.api.offer.admin.dto.ProviderPatchRequest;
 import com.eparly.api.offer.admin.service.CatalogAdminService;
@@ -68,6 +70,12 @@ public class CatalogAdminController {
             @RequestParam(defaultValue = "20") int size
     ) {
         return service.listProviders(page, size);
+    }
+
+    @GetMapping("/providers/{providerId}")
+    @Operation(summary = "Consulter un fournisseur")
+    public OfferProviderResponse getProvider(@PathVariable UUID providerId) {
+        return service.getProvider(providerId);
     }
 
     @PatchMapping("/providers/{providerId}")
@@ -154,6 +162,22 @@ public class CatalogAdminController {
             @Valid @RequestBody EvidenceVerificationRequest request
     ) {
         return service.verifyEvidence(JwtUserId.from(jwt), offerId, evidenceId, request);
+    }
+
+    @GetMapping("/offers/{offerId}/reuse-rights")
+    @Operation(summary = "Consulter les droits de réutilisation d'une offre")
+    public OfferReuseRightsResponse getReuseRights(@PathVariable UUID offerId) {
+        return service.getReuseRights(offerId);
+    }
+
+    @PatchMapping("/offers/{offerId}/reuse-rights")
+    @Operation(summary = "Établir les droits de réutilisation d'une offre, condition de sa publication")
+    public OfferReuseRightsResponse updateReuseRights(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID offerId,
+            @Valid @RequestBody OfferReuseRightsRequest request
+    ) {
+        return service.updateReuseRights(JwtUserId.from(jwt), offerId, request);
     }
 
     @PostMapping("/offers/{offerId}/publish")

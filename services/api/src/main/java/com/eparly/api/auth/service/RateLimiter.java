@@ -85,6 +85,26 @@ public class RateLimiter {
         );
     }
 
+    public void checkGoogleAuth(String ip) {
+        if (!properties.enabled()) return;
+        checkAndIncrement(
+                "google:ip:" + ip,
+                properties.refreshIpWindow(),
+                properties.refreshIpMaxAttempts(),
+                "Google sign-in (IP)"
+        );
+    }
+
+    public void checkGoogleChallenge(String ip) {
+        if (!properties.enabled()) return;
+        checkAndIncrement(
+                "google-challenge:ip:" + ip,
+                properties.refreshIpWindow(),
+                properties.refreshIpMaxAttempts(),
+                "Google challenge (IP)"
+        );
+    }
+
     public void checkRefresh(String ip) {
         if (!properties.enabled()) return;
         checkAndIncrement(

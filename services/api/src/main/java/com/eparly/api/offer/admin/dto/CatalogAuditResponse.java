@@ -1,5 +1,7 @@
 package com.eparly.api.offer.admin.dto;
 
+import com.eparly.api.offer.admin.domain.CatalogExecutionMode;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -11,6 +13,8 @@ public record CatalogAuditResponse(
         String resourceType,
         UUID resourceId,
         Map<String, Object> details,
-        Instant occurredAt
+        Instant occurredAt,
+        CatalogExecutionMode executionMode,
+        UUID requestedByUserId
 ) {
 }

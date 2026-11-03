@@ -1,0 +1,49 @@
+{
+  "version": "1",
+  "revisions": [
+    {
+      "providerKey": "free-mobile",
+      "commercialName": "Serie Free",
+      "sector": "MOBILE_PLAN",
+      "expectedPricingVersion": 0,
+      "characteristics": {
+        "dataGb": 110,
+        "network5G": true,
+        "roaming": true,
+        "afterPromotionPlan": "Forfait Free 5G+"
+      },
+      "eligibilityConditions": "Sans engagement. France metropolitaine. Reservee aux personnes n'ayant pas ete abonnees au Forfait Free dans les 30 jours precedant la souscription. Non cumulable avec toute offre promotionnelle.",
+      "pricing": {
+        "amountMinor": 1999,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": 1000,
+        "otherFees": "Carte SIM/eSIM facturee 10 EUR, paiement a la commande.",
+        "promotionPriceType": "FIXED_PRICE",
+        "promotionDurationMonths": 12,
+        "priceAfterPromotionMinor": 1299,
+        "promotionValidFrom": "2026-07-09",
+        "discountConditions": "12,99 EUR/mois pendant 12 mois, puis passage automatique au Forfait Free a 19,99 EUR/mois. Offre valable a partir du 09/07/2026.",
+        "taxesIncluded": true,
+        "dataUnknown": false,
+        "reason": "Ajout des frais SIM, conditions et date de debut selon le recapitulatif contractuel Serie Free du 09/07/2026 ; tarifs inchanges"
+      },
+      "evidences": [
+        {
+          "officialUrl": "https://mobile.free.fr/docs/Recapitulatif_contractuel_serie_free.pdf",
+          "consultedAt": "2026-11-02T21:01:04Z",
+          "evidenceScope": "OFFER",
+          "nature": "Recapitulatif contractuel Serie Free, version du 09/07/2026",
+          "provenance": "Lecture automatisee du PDF officiel, non verifiee par une personne"
+        },
+        {
+          "officialUrl": "https://mobile.free.fr/docs/Recapitulatif_contractuel_serie_free.pdf",
+          "consultedAt": "2026-11-02T21:01:04Z",
+          "evidenceScope": "PROMOTION",
+          "nature": "Conditions de la promotion, recapitulatif contractuel du 09/07/2026",
+          "provenance": "Lecture automatisee du PDF officiel, non verifiee par une personne"
+        }
+      ]
+    }
+  ]
+}

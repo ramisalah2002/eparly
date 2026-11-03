@@ -17,6 +17,7 @@ public record CatalogSyncSourceCreateRequest(
         @NotNull OfferSector sector,
         @Pattern(regexp = "^[A-Z]{2}$") String country,
         UUID providerId,
-        @Size(max = 10000) String extractorConfig
+        @Size(max = 10000) String extractorConfig,
+        @Size(max = 60) String connectorKey
 ) {
 }

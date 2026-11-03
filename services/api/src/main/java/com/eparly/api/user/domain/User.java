@@ -42,8 +42,8 @@ public class User {
     @Column(name = "full_name", length = 100)
     private String fullName;
 
-    @NotNull
-    @Column(name = "password_hash", nullable = false, length = 255)
+    /** Null pour un compte sans mot de passe local (connexion Google uniquement). */
+    @Column(name = "password_hash", length = 255)
     private String passwordHash;
 
     @NotNull

@@ -12,20 +12,35 @@ import java.util.regex.Pattern;
 @Service
 public class PriceNormalizationService {
     private static final Pattern AMOUNT = Pattern.compile(
-            "(?<![\\d])(?:\\d{1,3}(?:[ .\\u00a0]\\d{3})+|\\d+)(?:[,.]\\d{1,2})?");
+            "(?<![\\d])(?:\\d{1,3}(?:[ .\\u00a0]\\d{3})+|\\d+)(?:[,.]\\d+)?");
 
     public PriceValue normalize(String text, String explicitCurrency, String explicitPeriod) {
         if (text == null || text.isBlank()) return new PriceValue(null, normalizeCurrency(explicitCurrency),
                 normalizePeriod(explicitPeriod), false, false);
 
         Matcher matcher = AMOUNT.matcher(text);
-        if (!matcher.find()) return new PriceValue(null, normalizeCurrency(explicitCurrency),
-                normalizePeriod(explicitPeriod), isStartingPrice(text), false);
+        if (!matcher.find()) {
+            return new PriceValue(isExplicitlyFree(text) ? Long.valueOf(0L) : null,
+                    normalizeCurrency(explicitCurrency), normalizePeriod(explicitPeriod),
+                    isStartingPrice(text), false);
+        }
+        // Le premier montant accompagne d'une devise prime : "1 mois offert puis 9,99 EUR" vaut 9,99.
+        String firstAmount = matcher.group();
+        int firstStart = matcher.start();
+        do {
+            if (hasCurrencyMark(text, matcher)) {
+                firstAmount = matcher.group();
+                firstStart = matcher.start();
+                break;
+            }
+        } while (matcher.find());
 
-        String amountText = matcher.group().replace(" ", "").replace("\u00a0", "").replace(",", ".");
+        String amountText = firstAmount.replace(" ", "").replace("\u00a0", "").replace(",", ".");
         Long amountMinor;
         try {
-            amountMinor = new BigDecimal(amountText).movePointRight(2)
+            // Plus de deux decimales ou montant signe : valeur ambigue, jamais tronquee ni arrondie.
+            amountMinor = firstStart > 0 && text.charAt(firstStart - 1) == '-' ? null
+                    : new BigDecimal(amountText).movePointRight(2)
                     .setScale(0, RoundingMode.UNNECESSARY).longValueExact();
         } catch (ArithmeticException | NumberFormatException exception) {
             amountMinor = null;
@@ -79,16 +94,24 @@ public class PriceNormalizationService {
                 || normalized.contains("from ") || normalized.contains("starting at");
     }
 
+    private static boolean isExplicitlyFree(String text) {
+        return text.trim().toLowerCase(Locale.ROOT).matches("(?s)(gratuit|gratuite|free)\\b.*");
+    }
+
     private static int countCurrencyMarkedAmounts(String text) {
         Matcher matcher = AMOUNT.matcher(text);
         int count = 0;
         while (matcher.find()) {
-            int start = Math.max(0, matcher.start() - 4);
-            int end = Math.min(text.length(), matcher.end() + 5);
-            String context = text.substring(start, end).toUpperCase(Locale.ROOT);
-            if (context.contains("€") || context.matches("(?s).*\\b(?:EUR|USD|GBP|CHF)\\b.*")) count++;
+            if (hasCurrencyMark(text, matcher)) count++;
         }
         return count;
+    }
+
+    private static boolean hasCurrencyMark(String text, Matcher matcher) {
+        int start = Math.max(0, matcher.start() - 4);
+        int end = Math.min(text.length(), matcher.end() + 5);
+        String context = text.substring(start, end).toUpperCase(Locale.ROOT);
+        return context.contains("€") || context.matches("(?s).*\\b(?:EUR|USD|GBP|CHF)\\b.*");
     }
 
     public record PriceValue(Long amountMinor, String currency, OfferBillingPeriod billingPeriod,

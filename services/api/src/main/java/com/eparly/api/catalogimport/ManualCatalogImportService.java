@@ -1,7 +1,9 @@
 package com.eparly.api.catalogimport;
 
+import com.eparly.api.offer.admin.domain.CatalogActor;
 import com.eparly.api.offer.admin.dto.EvidenceCreateRequest;
 import com.eparly.api.offer.admin.dto.OfferDraftRequest;
+import com.eparly.api.offer.admin.dto.OfferPatchRequest;
 import com.eparly.api.offer.admin.dto.PricingUpsertRequest;
 import com.eparly.api.offer.admin.service.CatalogAdminService;
 import com.eparly.api.offer.domain.OfferBillingPeriod;
@@ -10,8 +12,11 @@ import com.eparly.api.offer.domain.OfferSector;
 import com.eparly.api.offer.domain.PromotionPriceType;
 import com.eparly.api.offer.domain.ProviderStatus;
 import com.eparly.api.offer.repository.CommercialOfferRepository;
+import com.eparly.api.offer.repository.OfferPricingRepository;
 import com.eparly.api.offer.repository.OfferProviderRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -34,17 +39,23 @@ public class ManualCatalogImportService {
     private final OfferProviderRepository providerRepository;
     private final CommercialOfferRepository offerRepository;
     private final ObjectMapper objectMapper;
-    private final UUID actorId;
+    private final OfferPricingRepository pricingRepository;
+    private final TransactionTemplate transaction;
+    private final CatalogActor actor;
 
     public ManualCatalogImportService(CatalogAdminService adminService,
                                      OfferProviderRepository providerRepository,
                                      CommercialOfferRepository offerRepository,
                                      ObjectMapper objectMapper,
-                                     CatalogImportProperties properties) {
+                                     CatalogImportProperties properties,
+                                     OfferPricingRepository pricingRepository,
+                                     PlatformTransactionManager transactionManager) {
         this.adminService = adminService;
         this.providerRepository = providerRepository;
         this.offerRepository = offerRepository;
         this.objectMapper = objectMapper;
+        this.pricingRepository = pricingRepository;
+        this.transaction = new TransactionTemplate(transactionManager);
         UUID parsed = null;
         if (properties.getActorUserId() != null && !properties.getActorUserId().isBlank()) {
             try {
@@ -53,7 +64,8 @@ public class ManualCatalogImportService {
                 parsed = null;
             }
         }
-        this.actorId = parsed == null ? new UUID(0L, 0L) : parsed;
+        // Le compte configure est le demandeur de l'import, pas son auteur.
+        this.actor = CatalogActor.systemImport(parsed);
     }
 
     public CatalogImportReport importFile(Path file, boolean apply) {
@@ -77,6 +89,7 @@ public class ManualCatalogImportService {
 
         boolean isProviderFile = root.has("providers");
         boolean isOfferFile = root.has("offers");
+        boolean isRevisionFile = root.has("revisions");
 
         Map<String, UUID> providerKeys = new LinkedHashMap<>();
 
@@ -124,6 +137,19 @@ public class ManualCatalogImportService {
                     }
                 } catch (Exception e) {
                     errors.add("Offer import error: " + e.getMessage());
+                    offersSkipped++;
+                }
+            }
+        }
+
+        if (isRevisionFile) {
+            loadProviderKeys(file.getParent() == null ? null : file.getParent().resolveSibling("v1"), providerKeys);
+            for (JsonNode node : root.get("revisions")) {
+                offersPlanned++;
+                try {
+                    if (applyRevision(node, providerKeys, apply, actions)) offersExisting++; else offersSkipped++;
+                } catch (Exception e) {
+                    errors.add("Revision error: " + e.getMessage());
                     offersSkipped++;
                 }
             }
@@ -188,7 +214,7 @@ public class ManualCatalogImportService {
             actions.add("PROVIDER_PLANNED_CREATE: " + provider.name() + " (" + sector + ")");
             return null;
         }
-        var created = adminService.createProvider(actorId, provider.name(), sector,
+        var created = adminService.createProvider(actor, provider.name(), sector,
                 provider.officialWebsite(), provider.country());
         actions.add("PROVIDER_CREATED: " + provider.name() + " (" + sector + ") id=" + created.id());
         return created.id();
@@ -219,36 +245,13 @@ public class ManualCatalogImportService {
         OfferImport.PricingImport pricing = null;
         JsonNode pNode = node.get("pricing");
         if (pNode != null && pNode.isObject()) {
-            pricing = new OfferImport.PricingImport(
-                    longOrNull(pNode, "amountMinor"),
-                    text(pNode, "currency"),
-                    text(pNode, "billingPeriod"),
-                    longOrNull(pNode, "activationFeeMinor"),
-                    text(pNode, "otherFees"),
-                    text(pNode, "promotionPriceType"),
-                    intOrNull(pNode, "promotionPercent"),
-                    longOrNull(pNode, "promotionDurationMonths"),
-                    longOrNull(pNode, "priceAfterPromotionMinor"),
-                    dateOrNull(pNode, "promotionValidFrom"),
-                    dateOrNull(pNode, "promotionValidUntil"),
-                    text(pNode, "discountConditions"),
-                    boolOrNull(pNode, "taxesIncluded"),
-                    boolOrNull(pNode, "dataUnknown"),
-                    text(pNode, "reason")
-            );
+            pricing = parsePricing(pNode);
         }
 
         OfferImport.EvidenceImport evidence = null;
         JsonNode eNode = node.get("evidence");
         if (eNode != null && eNode.isObject()) {
-            evidence = new OfferImport.EvidenceImport(
-                    text(eNode, "officialUrl"),
-                    instantOrNull(eNode, "consultedAt"),
-                    instantOrNull(eNode, "expiresAt"),
-                    text(eNode, "nature"),
-                    text(eNode, "provenance"),
-                    text(eNode, "evidenceScope")
-            );
+            evidence = parseEvidence(eNode);
         }
 
         return new OfferImport(
@@ -259,6 +262,37 @@ public class ManualCatalogImportService {
                 dateOrNull(node, "validFrom"),
                 dateOrNull(node, "validUntil"),
                 pricing, evidence
+        );
+    }
+
+    private OfferImport.PricingImport parsePricing(JsonNode pNode) {
+        return new OfferImport.PricingImport(
+                longOrNull(pNode, "amountMinor"),
+                text(pNode, "currency"),
+                text(pNode, "billingPeriod"),
+                longOrNull(pNode, "activationFeeMinor"),
+                text(pNode, "otherFees"),
+                text(pNode, "promotionPriceType"),
+                intOrNull(pNode, "promotionPercent"),
+                longOrNull(pNode, "promotionDurationMonths"),
+                longOrNull(pNode, "priceAfterPromotionMinor"),
+                dateOrNull(pNode, "promotionValidFrom"),
+                dateOrNull(pNode, "promotionValidUntil"),
+                text(pNode, "discountConditions"),
+                boolOrNull(pNode, "taxesIncluded"),
+                boolOrNull(pNode, "dataUnknown"),
+                text(pNode, "reason")
+        );
+    }
+
+    private OfferImport.EvidenceImport parseEvidence(JsonNode eNode) {
+        return new OfferImport.EvidenceImport(
+                text(eNode, "officialUrl"),
+                instantOrNull(eNode, "consultedAt"),
+                instantOrNull(eNode, "expiresAt"),
+                text(eNode, "nature"),
+                text(eNode, "provenance"),
+                text(eNode, "evidenceScope")
         );
     }
 
@@ -294,7 +328,12 @@ public class ManualCatalogImportService {
             return "CREATED";
         }
 
-        // apply
+        // Offre, tarif et preuve forment une seule transaction : un echec ne laisse pas de brouillon partiel.
+        UUID resolvedProviderId = providerId;
+        return transaction.execute(status -> createOffer(offer, resolvedProviderId, actions));
+    }
+
+    private String createOffer(OfferImport offer, UUID providerId, List<String> actions) {
         String characteristicsJson = "{}";
         if (offer.characteristics() != null && !offer.characteristics().isEmpty()) {
             try {
@@ -303,7 +342,7 @@ public class ManualCatalogImportService {
                 throw new IllegalArgumentException("Invalid characteristics JSON");
             }
         }
-        var created = adminService.createDraft(actorId, new OfferDraftRequest(
+        var created = adminService.createDraft(actor, new OfferDraftRequest(
                 providerId, offer.commercialName(), OfferSector.valueOf(offer.sector()),
                 characteristicsJson, offer.eligibilityConditions(), offer.commitment(),
                 offer.territory(), offer.validFrom(), offer.validUntil()));
@@ -316,36 +355,87 @@ public class ManualCatalogImportService {
             if (p.amountMinor() == null) {
                 actions.add("PRICING_SKIPPED_NO_AMOUNT: " + offer.commercialName());
             } else {
-                OfferBillingPeriod bp = p.billingPeriod() == null ? OfferBillingPeriod.MONTHLY
-                        : OfferBillingPeriod.valueOf(p.billingPeriod());
-                PromotionPriceType ppt = p.promotionPriceType() == null ? null
-                        : PromotionPriceType.valueOf(p.promotionPriceType());
-                adminService.upsertPricing(actorId, offerId, new PricingUpsertRequest(
-                        null, p.amountMinor(), p.currency() == null ? "EUR" : p.currency(), bp,
-                        p.activationFeeMinor(), p.otherFees(), ppt, p.promotionPercent(),
-                        p.promotionDurationMonths(), p.priceAfterPromotionMinor(),
-                        p.promotionValidFrom(), p.promotionValidUntil(), p.discountConditions(),
-                        p.taxesIncluded() == null ? Boolean.TRUE : p.taxesIncluded(),
-                        p.dataUnknown() == null ? Boolean.FALSE : p.dataUnknown(),
-                        p.reason()));
+                adminService.upsertPricing(actor, offerId, pricingRequest(p, null));
                 actions.add("PRICING_CREATED: " + offer.commercialName());
             }
         }
 
         // evidence
         if (offer.evidence() != null && offer.evidence().officialUrl() != null) {
-            OfferImport.EvidenceImport e = offer.evidence();
-            OfferEvidenceScope scope = e.evidenceScope() == null ? OfferEvidenceScope.OFFER
-                    : OfferEvidenceScope.valueOf(e.evidenceScope());
-            adminService.addEvidence(actorId, offerId, new EvidenceCreateRequest(
-                    e.officialUrl(), scope, e.nature() == null ? "Tarif officiel" : e.nature(),
-                    e.provenance() == null ? "Catalogue manuel V1" : e.provenance(),
-                    e.consultedAt() == null ? Instant.now() : e.consultedAt(),
-                    e.expiresAt()));
+            addEvidence(offerId, offer.evidence());
             actions.add("EVIDENCE_ADDED: " + offer.commercialName());
         }
 
         return "CREATED";
+    }
+
+    private PricingUpsertRequest pricingRequest(OfferImport.PricingImport p, Long expectedVersion) {
+        OfferBillingPeriod period = p.billingPeriod() == null ? OfferBillingPeriod.MONTHLY
+                : OfferBillingPeriod.valueOf(p.billingPeriod());
+        PromotionPriceType type = p.promotionPriceType() == null ? null
+                : PromotionPriceType.valueOf(p.promotionPriceType());
+        return new PricingUpsertRequest(
+                expectedVersion, p.amountMinor(), p.currency() == null ? "EUR" : p.currency(), period,
+                p.activationFeeMinor(), p.otherFees(), type, p.promotionPercent(),
+                p.promotionDurationMonths(), p.priceAfterPromotionMinor(),
+                p.promotionValidFrom(), p.promotionValidUntil(), p.discountConditions(),
+                p.taxesIncluded() == null ? Boolean.TRUE : p.taxesIncluded(),
+                // Une donnee non declaree reste inconnue : elle ne devient jamais fiable par defaut.
+                p.dataUnknown() == null ? Boolean.TRUE : p.dataUnknown(),
+                p.reason());
+    }
+
+    private void addEvidence(UUID offerId, OfferImport.EvidenceImport e) {
+        if (e.consultedAt() == null) {
+            throw new IllegalArgumentException("evidence.consultedAt is required: the real consultation date is never invented");
+        }
+        OfferEvidenceScope scope = e.evidenceScope() == null ? OfferEvidenceScope.OFFER
+                : OfferEvidenceScope.valueOf(e.evidenceScope());
+        adminService.addEvidence(actor, offerId, new EvidenceCreateRequest(
+                e.officialUrl(), scope, e.nature() == null ? "Tarif officiel" : e.nature(),
+                e.provenance() == null ? "Catalogue manuel V1" : e.provenance(),
+                e.consultedAt(), e.expiresAt()));
+    }
+
+    /**
+     * Corrige une offre existante via les services metier, avec historique et audit. La version attendue rend le
+     * rejeu sans effet : le tarif a change, la revision n'est plus appliquee. Retourne vrai si elle a ete traitee.
+     */
+    private boolean applyRevision(JsonNode node, Map<String, UUID> providerKeys, boolean apply, List<String> actions) {
+        String name = text(node, "commercialName");
+        OfferSector sector = OfferSector.valueOf(text(node, "sector"));
+        UUID providerId = providerKeys.get(text(node, "providerKey"));
+        if (providerId == null) {
+            providerId = providerRepository.findByNameIgnoreCaseAndSector(text(node, "providerKey"), sector)
+                    .orElseThrow(() -> new IllegalArgumentException("Provider not found for revision: " + name))
+                    .getId();
+        }
+        var offer = offerRepository.findByCommercialNameAndProviderId(name, providerId)
+                .filter(found -> found.getSector() == sector)
+                .orElseThrow(() -> new IllegalArgumentException("Offer not found for revision: " + name));
+        var pricing = pricingRepository.findByOfferId(offer.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Pricing not found for revision: " + name));
+        long expected = node.get("expectedPricingVersion").longValue();
+        if (pricing.getVersion() != expected) {
+            actions.add("REVISION_SKIPPED_VERSION_CHANGED: " + name);
+            return false;
+        }
+        if (!apply) {
+            actions.add("REVISION_PLANNED: " + name);
+            return true;
+        }
+        OfferImport.PricingImport p = parsePricing(node.get("pricing"));
+        List<OfferImport.EvidenceImport> evidences = new ArrayList<>();
+        for (JsonNode evidence : node.get("evidences")) evidences.add(parseEvidence(evidence));
+        String characteristics = node.hasNonNull("characteristics") ? node.get("characteristics").toString() : null;
+        transaction.executeWithoutResult(status -> {
+            adminService.patchOffer(actor, offer.getId(), new OfferPatchRequest(offer.getVersion(), null,
+                    characteristics, text(node, "eligibilityConditions"), null, null, null, null));
+            adminService.upsertPricing(actor, offer.getId(), pricingRequest(p, expected));
+            evidences.forEach(evidence -> addEvidence(offer.getId(), evidence));
+        });
+        actions.add("REVISION_APPLIED: " + name);
+        return true;
     }
 
     private void loadProviderKeys(Path dir, Map<String, UUID> providerKeys) {

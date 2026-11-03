@@ -64,7 +64,7 @@ class CatalogSyncIntegrationTest {
     void schedulerIsNotRegisteredAndEmptyManualRunIsAValidNoOp() {
         assertThat(applicationContext.getBeansOfType(CatalogSyncScheduler.class)).isEmpty();
         var emptyRun = jobService.runNow();
-        assertThat(emptyRun.status()).isEqualTo("SUCCEEDED");
+        assertThat(emptyRun.status()).isEqualTo("SUCCESS");
         assertThat(emptyRun.sourcesConfigured()).isZero();
         assertThat(emptyRun.pagesFetched()).isZero();
     }
@@ -212,7 +212,7 @@ class CatalogSyncIntegrationTest {
         registerSource("JSON_FEED", "/blocked.json", "{}");
 
         var firstRun = jobService.runNow();
-        assertThat(firstRun.status()).isEqualTo("SUCCEEDED");
+        assertThat(firstRun.status()).isEqualTo("SUCCESS");
         assertThat(firstRun.sourcesConfigured()).isEqualTo(4);
         assertThat(firstRun.sourcesProcessed()).isEqualTo(4);
         assertThat(firstRun.pagesFetched()).isEqualTo(5);
@@ -235,7 +235,7 @@ class CatalogSyncIntegrationTest {
                 """, Integer.class)).isEqualTo(3);
 
         var secondRun = jobService.runNow();
-        assertThat(secondRun.status()).isEqualTo("SUCCEEDED");
+        assertThat(secondRun.status()).isEqualTo("SUCCESS");
         assertThat(secondRun.offersUnchanged()).isEqualTo(2);
         assertThat(count("catalog_offer_observations")).isEqualTo(4);
         assertThat(count("catalog_offer_candidates")).isEqualTo(3);

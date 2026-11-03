@@ -148,9 +148,13 @@ public class OfferCatalogService {
         if (o.getValidUntil() != null && o.getValidUntil().isBefore(availabilityService.currentDate())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Offer validity has expired");
         }
+        requirePublishableData(o, pricing);
         OfferEvidence evidence = availabilityService.currentEvidence(o)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST,
                         "Publication requires a current, verified official source"));
+        if (!pointsToSpecificPage(evidence.getOfficialUrl())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Publication requires evidence from the offer's own page");
+        }
         o.setPublicationStatus(OfferStatus.VERIFIED);
         CommercialOffer saved = offerRepository.saveAndFlush(o);
         return toDetailResponse(saved, List.of(evidence));
@@ -396,6 +400,40 @@ public class OfferCatalogService {
                     && uri.getHost() != null && !uri.getHost().isBlank()
                     && uri.getPath() != null;
         } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    /** Une donnee inconnue n'est jamais assimilee a zero ou a une absence : elle bloque la publication. */
+    private static void requirePublishableData(CommercialOffer offer, OfferPricing pricing) {
+        if (offer.getReuseRightsStatus() != com.eparly.api.offer.domain.OfferReuseRights.ESTABLISHED) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Publication requires established reuse rights");
+        }
+        if (pricing.getActivationFeeMinor() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Publication requires known activation fees");
+        }
+        if (offer.getCommitment() == null || offer.getCommitment().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Publication requires a confirmed commitment");
+        }
+        boolean promotionDeclared = pricing.getPromotionPercent() != null
+                || pricing.getPromotionDurationMonths() != null || pricing.getPriceAfterPromotionMinor() != null
+                || pricing.getPromotionValidFrom() != null || pricing.getPromotionValidUntil() != null;
+        boolean promotionComplete = pricing.getPromotionPriceType() != null
+                && pricing.getPromotionDurationMonths() != null && pricing.getPromotionDurationMonths() > 0
+                && switch (pricing.getPromotionPriceType()) {
+                    case FIXED_PRICE -> pricing.getPriceAfterPromotionMinor() != null;
+                    case PERCENTAGE -> pricing.getPromotionPercent() != null;
+                };
+        if ((promotionDeclared || pricing.getPromotionPriceType() != null) && !promotionComplete) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Publication requires a complete promotion");
+        }
+    }
+
+    private static boolean pointsToSpecificPage(String url) {
+        try {
+            String path = java.net.URI.create(url.trim()).getPath();
+            return path != null && !path.isBlank() && !path.equals("/");
+        } catch (IllegalArgumentException exception) {
             return false;
         }
     }

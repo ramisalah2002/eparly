@@ -3,6 +3,7 @@
 > Note V1 (étape 12C.6) : l'intégration Awin et les collecteurs automatiques sont
 > abandonnés/reportés pour la V1. Ce document est conservé à titre historique et
 > d'évaluation ; il ne constitue pas une dépendance ni un prérequis de la V1.
+> Étape 14A : l'inventaire à jour figure dans [`catalog-sources-inventory.md`](catalog-sources-inventory.md).
 
 ## Décision au 29 octobre 2026
 
@@ -149,7 +150,7 @@ Après approbation et configuration d'au moins une source par les routes sécuri
 
 ```text
 CATALOG_SYNC_ENABLED=true
-CATALOG_SYNC_CRON=0 0 4 * * *
+CATALOG_SYNC_CRON=0 0 3 * * *
 CATALOG_SYNC_ZONE=Europe/Paris
 CATALOG_SYNC_CONTACT=<contact technique public>
 CATALOG_SYNC_MAX_EXECUTION_DURATION=PT10M

@@ -49,6 +49,12 @@ public record SubscriptionResponse(
         Long amountMinor,
         LocalDate lastPaymentDate,
         LocalDate nextEstimatedDate,
-        Long usualAmountMinor
+        Long usualAmountMinor,
+        // suivi
+        LocalDate commitmentEndDate,
+        boolean noLongerNeeded,
+        Instant archivedAt,
+        com.eparly.api.subscription.domain.SubscriptionModels.DateStatus nextDueDateStatus,
+        java.util.List<UUID> linkedSeriesIds
 ) {
 }

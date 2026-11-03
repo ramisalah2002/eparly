@@ -9,7 +9,8 @@ import org.springframework.context.annotation.Configuration;
         RefreshTokenProperties.class,
         PasswordResetProperties.class,
         RateLimitProperties.class,
-        AuthCleanupProperties.class
+        AuthCleanupProperties.class,
+        GoogleAuthProperties.class
 })
 public class AuthPropertiesConfiguration {
 }

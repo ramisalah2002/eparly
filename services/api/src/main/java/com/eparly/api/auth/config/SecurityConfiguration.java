@@ -47,6 +47,8 @@ public class SecurityConfiguration {
                     authorize.requestMatchers(HttpMethod.POST,
                                     "/v1/auth/register",
                                     "/v1/auth/login",
+                                    "/v1/auth/google",
+                                    "/v1/auth/google/challenge",
                                     "/v1/auth/refresh",
                                     "/v1/auth/logout",
                                     "/v1/auth/verify-email",

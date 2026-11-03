@@ -9,6 +9,7 @@ import com.eparly.api.recurring.domain.RecurringSeriesStatus;
 import com.eparly.api.recurring.repository.RecurringSeriesRepository;
 import com.eparly.api.subscription.domain.Subscription;
 import com.eparly.api.subscription.domain.SubscriptionOrigin;
+import com.eparly.api.subscription.domain.SubscriptionModels.DateStatus;
 import com.eparly.api.subscription.domain.SubscriptionStatus;
 import com.eparly.api.subscription.domain.SubscriptionStatusHistory;
 import com.eparly.api.subscription.dto.CreateSubscriptionRequest;
@@ -18,6 +19,7 @@ import com.eparly.api.subscription.dto.UpdateSubscriptionRequest;
 import com.eparly.api.subscription.dto.UpdateSubscriptionStatusRequest;
 import com.eparly.api.subscription.repository.SubscriptionRepository;
 import com.eparly.api.subscription.repository.SubscriptionStatusHistoryRepository;
+import com.eparly.api.subscription.repository.SubscriptionTrackingRepository;
 import com.eparly.api.user.domain.User;
 import com.eparly.api.user.domain.UserStatus;
 import com.eparly.api.user.repository.UserRepository;
@@ -46,17 +48,20 @@ public class SubscriptionService {
     private final AccountRepository accountRepository;
     private final RecurringSeriesRepository recurringSeriesRepository;
     private final UserRepository userRepository;
+    private final SubscriptionTrackingRepository tracking;
 
     public SubscriptionService(SubscriptionRepository repository,
                                SubscriptionStatusHistoryRepository historyRepository,
                                AccountRepository accountRepository,
                                RecurringSeriesRepository recurringSeriesRepository,
-                               UserRepository userRepository) {
+                               UserRepository userRepository,
+                               SubscriptionTrackingRepository tracking) {
         this.repository = repository;
         this.historyRepository = historyRepository;
         this.accountRepository = accountRepository;
         this.recurringSeriesRepository = recurringSeriesRepository;
         this.userRepository = userRepository;
+        this.tracking = tracking;
     }
 
     public List<SubscriptionResponse> list(UUID userId, UUID accountId, SubscriptionStatus status) {
@@ -66,6 +71,7 @@ public class SubscriptionService {
             if (!ok) throw new ApiException(HttpStatus.NOT_FOUND, "Account not found");
         }
         return repository.findAllByUserIdFiltered(userId, accountId, status).stream()
+                .filter(s -> s.getArchivedAt() == null)
                 .map(this::toResponse)
                 .toList();
     }
@@ -94,7 +100,7 @@ public class SubscriptionService {
             if (series.getStatus() == RecurringSeriesStatus.DISMISSED) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot transform a dismissed series");
             }
-            if (repository.existsByRecurringSeriesId(series.getId())) {
+            if (tracking.seriesAlreadyLinked(series.getId())) {
                 throw new ApiException(HttpStatus.CONFLICT, "Recurring series already linked to a subscription");
             }
             // auto-confirm the series if needed
@@ -181,6 +187,7 @@ public class SubscriptionService {
         requireActiveUser(userId);
         Subscription sub = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Subscription not found"));
+        Map<String, Object> before = editableFields(sub);
 
         if (req.name() != null) {
             String name = req.name().trim();
@@ -209,9 +216,86 @@ public class SubscriptionService {
         if (req.notes() != null) {
             sub.setNotes(req.notes().trim().isEmpty() ? null : req.notes().trim());
         }
-        // nextDueDate clearing not supported via null ambiguity; keep.
+        if (req.commitmentEndDate() != null) sub.setCommitmentEndDate(req.commitmentEndDate());
+        if (req.noLongerNeeded() != null) sub.setNoLongerNeeded(req.noLongerNeeded());
+        if (req.unknownFields() != null) {
+            for (String field : req.unknownFields()) markUnknown(sub, field);
+        }
 
-        return toResponse(repository.saveAndFlush(sub));
+        Subscription saved = repository.saveAndFlush(sub);
+        Map<String, Object> after = editableFields(saved);
+        if (!before.equals(after)) {
+            Map<String, Object> changes = new LinkedHashMap<>();
+            changes.put("before", before);
+            changes.put("after", after);
+            tracking.event(saved.getId(), "FIELDS_CORRECTED", changes, null);
+        }
+        return toResponse(saved);
+    }
+
+    private static void markUnknown(Subscription sub, String field) {
+        switch (field) {
+            case "AMOUNT" -> sub.setDeclaredAmountMinor(null);
+            case "FREQUENCY" -> sub.setDeclaredFrequency(RecurringFrequency.UNKNOWN);
+            case "NEXT_DUE_DATE" -> sub.setNextDueDate(null);
+            case "COMMITMENT_END_DATE" -> sub.setCommitmentEndDate(null);
+            case "PROVIDER" -> sub.setProvider(null);
+            default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unknown field: " + field);
+        }
+    }
+
+    private static Map<String, Object> editableFields(Subscription sub) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("name", sub.getName());
+        fields.put("provider", sub.getProvider());
+        fields.put("amountMinor", sub.getDeclaredAmountMinor());
+        fields.put("currency", sub.getCurrency());
+        fields.put("frequency", String.valueOf(sub.getDeclaredFrequency()));
+        fields.put("nextDueDate", String.valueOf(sub.getNextDueDate()));
+        fields.put("commitmentEndDate", String.valueOf(sub.getCommitmentEndDate()));
+        fields.put("noLongerNeeded", sub.isNoLongerNeeded());
+        fields.put("notes", sub.getNotes());
+        return fields;
+    }
+
+    @Transactional
+    public SubscriptionResponse archive(UUID userId, UUID id) {
+        requireActiveUser(userId);
+        Subscription sub = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Subscription not found"));
+        var cancellation = tracking.latestCancellation(id).orElse(null);
+        if (cancellation != null && List.of(com.eparly.api.subscription.domain.SubscriptionModels.CancellationStatus.PLANNED,
+                com.eparly.api.subscription.domain.SubscriptionModels.CancellationStatus.REQUESTED,
+                com.eparly.api.subscription.domain.SubscriptionModels.CancellationStatus.CONFIRMED).contains(cancellation.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "A cancellation is in progress");
+        }
+        if (sub.getArchivedAt() == null) {
+            sub.setArchivedAt(Instant.now());
+            repository.saveAndFlush(sub);
+            tracking.event(id, "ARCHIVED", Map.of(), null);
+        }
+        return toResponse(sub);
+    }
+
+    /** Le rattachement est un choix explicite : deux series ne sont jamais fusionnees automatiquement. */
+    @Transactional
+    public SubscriptionResponse linkSeries(UUID userId, UUID id, UUID seriesId) {
+        requireActiveUser(userId);
+        Subscription sub = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Subscription not found"));
+        RecurringSeries series = recurringSeriesRepository.findByIdAndUserId(seriesId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Recurring series not found"));
+        if (tracking.seriesAlreadyLinked(seriesId)) {
+            throw new ApiException(HttpStatus.CONFLICT, "Recurring series already linked to a subscription");
+        }
+        if (series.getStatus() != RecurringSeriesStatus.CONFIRMED) {
+            series.setStatus(RecurringSeriesStatus.CONFIRMED);
+            series.setUserDecisionAt(Instant.now());
+            recurringSeriesRepository.save(series);
+        }
+        tracking.linkSeries(id, seriesId);
+        tracking.event(id, "SERIES_LINKED", Map.of("seriesId", seriesId.toString()), null);
+        return toResponse(sub);
     }
 
     @Transactional
@@ -457,7 +541,12 @@ public class SubscriptionService {
                 s.getDeclaredAmountMinor(),
                 observedLastPayment,
                 observedNextEstimated,
-                observedUsual
+                observedUsual,
+                s.getCommitmentEndDate(),
+                s.isNoLongerNeeded(),
+                s.getArchivedAt(),
+                s.getNextDueDate() != null ? DateStatus.CONFIRMED : indicativeNext != null ? DateStatus.ESTIMATED : DateStatus.UNKNOWN,
+                tracking.linkedSeriesIds(s.getId())
         );
     }
 }
