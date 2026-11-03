@@ -77,6 +77,9 @@ jobs:
       - name: TypeScript validation
         run: pnpm --filter admin typecheck
 
+      - name: Unit tests
+        run: pnpm --filter admin test
+
       - name: Production build
         run: pnpm --filter admin build
 
