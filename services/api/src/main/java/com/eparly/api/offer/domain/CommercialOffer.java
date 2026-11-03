@@ -81,6 +81,29 @@ public class CommercialOffer {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reuse_rights_status", nullable = false, length = 20)
+    private OfferReuseRights reuseRightsStatus = OfferReuseRights.NOT_ESTABLISHED;
+
+    @Column(name = "reuse_rights_basis", length = 500)
+    private String reuseRightsBasis;
+
+    public OfferReuseRights getReuseRightsStatus() {
+        return reuseRightsStatus;
+    }
+
+    public void setReuseRightsStatus(OfferReuseRights reuseRightsStatus) {
+        this.reuseRightsStatus = reuseRightsStatus;
+    }
+
+    public String getReuseRightsBasis() {
+        return reuseRightsBasis;
+    }
+
+    public void setReuseRightsBasis(String reuseRightsBasis) {
+        this.reuseRightsBasis = reuseRightsBasis;
+    }
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;

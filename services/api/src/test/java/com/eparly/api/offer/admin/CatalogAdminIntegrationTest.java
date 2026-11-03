@@ -239,6 +239,7 @@ class CatalogAdminIntegrationTest {
                                 """.formatted(promotionProof.get("version").asText())))
                 .andExpect(status().isOk());
 
+        makePublishable(offerId);
         mockMvc.perform(post("/v1/admin/catalog/offers/{id}/publish", offerId)
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
@@ -317,6 +318,7 @@ class CatalogAdminIntegrationTest {
         mockMvc.perform(get("/v1/offers/{id}", offerId)
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isNotFound());
+        makePublishable(offerId);
         mockMvc.perform(post("/v1/admin/catalog/offers/{id}/publish", offerId)
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isBadRequest());
@@ -330,6 +332,7 @@ class CatalogAdminIntegrationTest {
                                  "summary":"Tarif révisé contrôlé sur la page officielle"}
                                 """.formatted(verified.get("version").asText())))
                 .andExpect(status().isOk());
+        makePublishable(offerId);
         mockMvc.perform(post("/v1/admin/catalog/offers/{id}/publish", offerId)
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk());
@@ -522,10 +525,18 @@ class CatalogAdminIntegrationTest {
                                  "summary":"Promotion alternative contrôlée"}
                                 """.formatted(promotionProof.get("version").asText())))
                 .andExpect(status().isOk());
+        makePublishable(id);
         return response(mockMvc.perform(post("/v1/admin/catalog/offers/{id}/publish", id)
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andReturn());
+    }
+
+    /** Remplit les conditions de donnees et de droits, pour que chaque test exerce sa propre regle. */
+    private void makePublishable(Object offerId) {
+        UUID id = UUID.fromString(offerId.toString());
+        jdbcTemplate.update("UPDATE commercial_offers SET reuse_rights_status = 'ESTABLISHED', commitment = COALESCE(commitment, 'Sans engagement') WHERE id = ?", id);
+        jdbcTemplate.update("UPDATE offer_pricing SET activation_fee_minor = COALESCE(activation_fee_minor, 0) WHERE offer_id = ?", id);
     }
 
     private User createActiveUser() {

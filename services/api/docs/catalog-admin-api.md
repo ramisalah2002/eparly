@@ -251,3 +251,29 @@ ou une version concurrente.
   liste explicite de domaines tiers approuvés n'est pas encore modélisée.
 - Les caractéristiques extensibles ne constituent pas encore un schéma exhaustif
   par secteur, et le secteur `INTERNET_BOX` n'a pas encore de stratégie de comparaison.
+
+## Traçabilité et conditions de publication (V28)
+
+Chaque événement de `catalog_admin_audit` porte un `executionMode` :
+
+| Mode | Sens | Acteur |
+|---|---|---|
+| `SYSTEM_IMPORT` | Import par script | Aucun ; le compte configuré figure dans `requestedByUserId` |
+| `ADMIN_ACTION` | Action d'un administrateur via l'API | L'administrateur |
+| `MANUAL_VERIFICATION` | Vérification d'une preuve ou décision sur les droits | La personne qui décide |
+| `null` | Événement antérieur à V28, non qualifié | Tel qu'enregistré |
+
+Les événements anciens ne sont jamais réécrits : une erreur se corrige par un événement `AUDIT_ACTOR_CORRECTED` qui cite
+`correctedAuditId`.
+
+`GET` et `PATCH /v1/admin/catalog/offers/{offerId}/reuse-rights` lisent et décident des droits de réutilisation :
+
+```json
+{ "expectedVersion": 0, "status": "ESTABLISHED", "basis": "Accord écrit de l'éditeur du 2026-12-01" }
+```
+
+Toute offre commence à `NOT_ESTABLISHED`. Passer à une autre valeur qu'`ESTABLISHED` renvoie une offre publiée en `DRAFT`.
+
+La publication est refusée (`400`) sans : droits `ESTABLISHED`, frais d'activation connus (`0` si explicitement nuls),
+engagement renseigné, promotion complète si une promotion est déclarée, tarif fiable (`dataUnknown=false`), preuve
+`OFFER` vérifiée par une personne et pointant vers une page précise, pas vers la racine du site.

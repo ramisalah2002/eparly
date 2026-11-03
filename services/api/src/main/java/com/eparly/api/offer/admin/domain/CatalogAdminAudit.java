@@ -2,6 +2,8 @@ package com.eparly.api.offer.admin.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -22,7 +24,7 @@ public class CatalogAdminAudit {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "actor_user_id", nullable = false)
+    @Column(name = "actor_user_id")
     private UUID actorUserId;
 
     @Column(name = "action", nullable = false, length = 80)
@@ -40,6 +42,29 @@ public class CatalogAdminAudit {
 
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "execution_mode", length = 30)
+    private CatalogExecutionMode executionMode;
+
+    @Column(name = "requested_by_user_id")
+    private UUID requestedByUserId;
+
+    public CatalogExecutionMode getExecutionMode() {
+        return executionMode;
+    }
+
+    public void setExecutionMode(CatalogExecutionMode executionMode) {
+        this.executionMode = executionMode;
+    }
+
+    public UUID getRequestedByUserId() {
+        return requestedByUserId;
+    }
+
+    public void setRequestedByUserId(UUID requestedByUserId) {
+        this.requestedByUserId = requestedByUserId;
+    }
 
     @PrePersist
     protected void onCreate() {

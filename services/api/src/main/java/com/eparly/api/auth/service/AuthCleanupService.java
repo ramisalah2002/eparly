@@ -21,6 +21,7 @@ public class AuthCleanupService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final RefreshTokenSessionRepository refreshTokenSessionRepository;
     private final RateLimiter rateLimiter;
+    private final GoogleChallengeService googleChallengeService;
     private final AuthCleanupProperties properties;
     private final Clock clock;
 
@@ -29,12 +30,14 @@ public class AuthCleanupService {
             PasswordResetTokenRepository passwordResetTokenRepository,
             RefreshTokenSessionRepository refreshTokenSessionRepository,
             RateLimiter rateLimiter,
+            GoogleChallengeService googleChallengeService,
             AuthCleanupProperties properties
     ) {
         this.emailVerificationTokenRepository = emailVerificationTokenRepository;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.refreshTokenSessionRepository = refreshTokenSessionRepository;
         this.rateLimiter = rateLimiter;
+        this.googleChallengeService = googleChallengeService;
         this.properties = properties;
         this.clock = Clock.systemUTC();
     }
@@ -44,7 +47,7 @@ public class AuthCleanupService {
     public CleanupReport runScheduledCleanup() {
         if (!properties.enabled()) {
             LOGGER.debug("Scheduled authentication data cleanup is disabled");
-            return new CleanupReport(0, 0, 0, 0);
+            return new CleanupReport(0, 0, 0, 0, 0);
         }
         return cleanupAll();
     }
@@ -69,17 +72,21 @@ public class AuthCleanupService {
         // 4. Entrées de limitation de débit expirées
         int deletedRateLimits = rateLimiter.cleanupExpired(now);
 
-        LOGGER.info("Auth data cleanup completed: emailTokens={}, resetTokens={}, refreshSessions={}, rateLimits={}",
-                deletedEmailTokens, deletedResetTokens, deletedRefreshSessions, deletedRateLimits);
+        // 5. Challenges Google expirés : ils sont déjà refusés, consommés ou non
+        int deletedGoogleChallenges = googleChallengeService.cleanupExpired(now);
 
-        return new CleanupReport(deletedEmailTokens, deletedResetTokens, deletedRefreshSessions, deletedRateLimits);
+        LOGGER.info("Auth data cleanup completed: emailTokens={}, resetTokens={}, refreshSessions={}, rateLimits={}, googleChallenges={}",
+                deletedEmailTokens, deletedResetTokens, deletedRefreshSessions, deletedRateLimits, deletedGoogleChallenges);
+
+        return new CleanupReport(deletedEmailTokens, deletedResetTokens, deletedRefreshSessions, deletedRateLimits, deletedGoogleChallenges);
     }
 
     public record CleanupReport(
             int deletedEmailTokens,
             int deletedResetTokens,
             int deletedRefreshSessions,
-            int deletedRateLimits
+            int deletedRateLimits,
+            int deletedGoogleChallenges
     ) {
     }
 }

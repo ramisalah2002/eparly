@@ -1,6 +1,7 @@
 package com.eparly.api.offer.admin.service;
 
 import com.eparly.api.auth.exception.ApiException;
+import com.eparly.api.offer.admin.domain.CatalogActor;
 import com.eparly.api.offer.admin.domain.CatalogAdminAudit;
 import com.eparly.api.offer.admin.dto.AdminPageResponse;
 import com.eparly.api.offer.admin.dto.AdminEvidenceResponse;
@@ -10,6 +11,8 @@ import com.eparly.api.offer.admin.dto.EvidenceVerificationRequest;
 import com.eparly.api.offer.admin.dto.OfferDraftRequest;
 import com.eparly.api.offer.admin.dto.OfferPatchRequest;
 import com.eparly.api.offer.admin.dto.OfferPriceHistoryResponse;
+import com.eparly.api.offer.admin.dto.OfferReuseRightsRequest;
+import com.eparly.api.offer.admin.dto.OfferReuseRightsResponse;
 import com.eparly.api.offer.admin.dto.PricingUpsertRequest;
 import com.eparly.api.offer.admin.dto.ProviderPatchRequest;
 import com.eparly.api.offer.admin.repository.CatalogAdminAuditRepository;
@@ -20,6 +23,7 @@ import com.eparly.api.offer.domain.OfferEvidenceScope;
 import com.eparly.api.offer.domain.OfferPriceHistory;
 import com.eparly.api.offer.domain.OfferPricing;
 import com.eparly.api.offer.domain.OfferProvider;
+import com.eparly.api.offer.domain.OfferReuseRights;
 import com.eparly.api.offer.domain.OfferSector;
 import com.eparly.api.offer.domain.OfferStatus;
 import com.eparly.api.offer.domain.PromotionPriceType;
@@ -96,6 +100,13 @@ public class CatalogAdminService {
     public OfferProviderResponse createProvider(
             UUID actorId, String name, OfferSector sector, String officialWebsite, String country
     ) {
+        return createProvider(CatalogActor.admin(actorId), name, sector, officialWebsite, country);
+    }
+
+    @Transactional
+    public OfferProviderResponse createProvider(
+            CatalogActor actorId, String name, OfferSector sector, String officialWebsite, String country
+    ) {
         if (sector == null || providerRepository.existsByNameIgnoreCaseAndSector(name.trim(), sector)) {
             throw new ApiException(HttpStatus.CONFLICT, "Provider already exists or sector is invalid");
         }
@@ -171,6 +182,11 @@ public class CatalogAdminService {
 
     @Transactional
     public CommercialOfferResponse createDraft(UUID actorId, OfferDraftRequest request) {
+        return createDraft(CatalogActor.admin(actorId), request);
+    }
+
+    @Transactional
+    public CommercialOfferResponse createDraft(CatalogActor actorId, OfferDraftRequest request) {
         validateOfferDates(request.validFrom(), request.validUntil());
         validateCharacteristics(request.characteristics(), request.sector());
         CommercialOfferResponse created = catalogService.createDraftOffer(
@@ -202,6 +218,11 @@ public class CatalogAdminService {
 
     @Transactional
     public CommercialOfferResponse patchOffer(UUID actorId, UUID offerId, OfferPatchRequest request) {
+        return patchOffer(CatalogActor.admin(actorId), offerId, request);
+    }
+
+    @Transactional
+    public CommercialOfferResponse patchOffer(CatalogActor actorId, UUID offerId, OfferPatchRequest request) {
         CommercialOffer offer = requireOffer(offerId);
         requireVersion(request.expectedVersion(), offer.getVersion(), "Offer has changed; reload it");
         if (offer.getPublicationStatus() == OfferStatus.ARCHIVED) {
@@ -252,6 +273,11 @@ public class CatalogAdminService {
 
     @Transactional
     public OfferPricingResponse upsertPricing(UUID actorId, UUID offerId, PricingUpsertRequest request) {
+        return upsertPricing(CatalogActor.admin(actorId), offerId, request);
+    }
+
+    @Transactional
+    public OfferPricingResponse upsertPricing(CatalogActor actorId, UUID offerId, PricingUpsertRequest request) {
         CommercialOffer offer = requireOffer(offerId);
         if (offer.getPublicationStatus() == OfferStatus.ARCHIVED) {
             throw new ApiException(HttpStatus.CONFLICT, "Archived offers cannot be repriced");
@@ -298,6 +324,11 @@ public class CatalogAdminService {
 
     @Transactional
     public AdminEvidenceResponse addEvidence(UUID actorId, UUID offerId, EvidenceCreateRequest request) {
+        return addEvidence(CatalogActor.admin(actorId), offerId, request);
+    }
+
+    @Transactional
+    public AdminEvidenceResponse addEvidence(CatalogActor actorId, UUID offerId, EvidenceCreateRequest request) {
         CommercialOffer offer = requireOffer(offerId);
         validateSourceDomain(offer.getProvider(), request.officialUrl());
         Instant now = availabilityService.currentInstant();
@@ -367,11 +398,39 @@ public class CatalogAdminService {
             evidence.setVerifiedProviderVersion(offer.getProvider().getVersion());
         }
         OfferEvidence saved = evidenceRepository.saveAndFlush(evidence);
-        audit(actorId, request.status() == EvidenceStatus.VERIFIED ? "EVIDENCE_VERIFIED" : "EVIDENCE_INVALIDATED",
+        audit(CatalogActor.manualVerification(actorId), request.status() == EvidenceStatus.VERIFIED ? "EVIDENCE_VERIFIED" : "EVIDENCE_INVALIDATED",
                 "EVIDENCE", evidenceId, details("offerId", offerId, "before", before,
                         "after", details("status", saved.getVerificationStatus(),
                                 "verifiedAt", saved.getVerifiedAt(), "verifiedByUserId", saved.getVerifiedByUserId())));
         return evidenceResponse(saved);
+    }
+
+    public OfferReuseRightsResponse getReuseRights(UUID offerId) {
+        return reuseRightsResponse(requireOffer(offerId));
+    }
+
+    /** Decision humaine : seule une personne peut etablir les droits de reutilisation d'une offre. */
+    @Transactional
+    public OfferReuseRightsResponse updateReuseRights(UUID actorId, UUID offerId, OfferReuseRightsRequest request) {
+        CommercialOffer offer = requireOffer(offerId);
+        requireVersion(request.expectedVersion(), offer.getVersion(), "Offer has changed; reload it");
+        Map<String, Object> before = details("status", offer.getReuseRightsStatus(), "basis", offer.getReuseRightsBasis());
+        offer.setReuseRightsStatus(request.status());
+        offer.setReuseRightsBasis(request.basis().trim());
+        if (request.status() != OfferReuseRights.ESTABLISHED
+                && offer.getPublicationStatus() == OfferStatus.VERIFIED) {
+            offer.setPublicationStatus(OfferStatus.DRAFT);
+        }
+        CommercialOffer saved = offerRepository.saveAndFlush(offer);
+        audit(CatalogActor.manualVerification(actorId), "OFFER_REUSE_RIGHTS_UPDATED", "OFFER", offerId,
+                details("before", before, "after",
+                        details("status", saved.getReuseRightsStatus(), "basis", saved.getReuseRightsBasis())));
+        return reuseRightsResponse(saved);
+    }
+
+    private OfferReuseRightsResponse reuseRightsResponse(CommercialOffer offer) {
+        return new OfferReuseRightsResponse(offer.getId(), offer.getReuseRightsStatus(),
+                offer.getReuseRightsBasis(), offer.getVersion());
     }
 
     @Transactional
@@ -648,12 +707,20 @@ public class CatalogAdminService {
 
     private CatalogAuditResponse auditResponse(CatalogAdminAudit audit) {
         return new CatalogAuditResponse(audit.getId(), audit.getActorUserId(), audit.getAction(),
-                audit.getResourceType(), audit.getResourceId(), audit.getDetails(), audit.getOccurredAt());
+                audit.getResourceType(), audit.getResourceId(), audit.getDetails(), audit.getOccurredAt(),
+                audit.getExecutionMode(), audit.getRequestedByUserId());
     }
 
     private void audit(UUID actor, String action, String resourceType, UUID resourceId, Map<String, Object> details) {
+        audit(CatalogActor.admin(actor), action, resourceType, resourceId, details);
+    }
+
+    private void audit(CatalogActor actor, String action, String resourceType, UUID resourceId,
+                       Map<String, Object> details) {
         CatalogAdminAudit audit = new CatalogAdminAudit();
-        audit.setActorUserId(actor);
+        audit.setActorUserId(actor.userId());
+        audit.setExecutionMode(actor.mode());
+        audit.setRequestedByUserId(actor.requestedByUserId());
         audit.setAction(action);
         audit.setResourceType(resourceType);
         audit.setResourceId(resourceId);

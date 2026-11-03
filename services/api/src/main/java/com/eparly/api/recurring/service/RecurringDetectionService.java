@@ -40,6 +40,8 @@ public class RecurringDetectionService {
 
     private static final Logger log = LoggerFactory.getLogger(RecurringDetectionService.class);
 
+    private static final UUID TRANSFER_CATEGORY = UUID.fromString("550e8400-e001-0000-0000-00000000000b");
+
     private static final Set<String> GENERIC_LABELS = Set.of(
             "CB", "CARTE", "PAIEMENT", "VIREMENT", "RETRAIT", "DAB",
             "OPERATION", "ACHAT", "DEBIT", "CREDIT"
@@ -114,21 +116,25 @@ public class RecurringDetectionService {
                 for (Transaction t : txs) {
                     if (!isCandidate(t)) continue;
                     String currency = t.getCurrency() != null ? t.getCurrency() : account.getCurrency();
-                    String key = t.getNormalizedLabel() + "##CUR##" + currency;
+                    String key = LabelKey.of(t.getNormalizedLabel()) + "##CUR##" + currency;
                     groups.computeIfAbsent(key, k -> new ArrayList<>()).add(t);
                 }
 
                 for (Map.Entry<String, List<Transaction>> entry : groups.entrySet()) {
                     String[] parts = entry.getKey().split("##CUR##", 2);
-                    String label = parts[0];
+                    String mergedKey = parts[0];
                     String currency = parts.length > 1 ? parts[1] : account.getCurrency();
                     List<Transaction> group = entry.getValue();
+                    Set<String> labels = new HashSet<>();
+                    group.forEach(t -> labels.add(t.getNormalizedLabel()));
+                    // Un libelle unique reste tel quel ; des variantes sont portees par leur cle commune.
+                    String label = labels.size() == 1 ? labels.iterator().next() : mergedKey;
                     group.sort(Comparator.comparing(Transaction::getBookingDate)
                             .thenComparing(t -> t.getId() == null ? UUID.randomUUID() : t.getId()));
 
                     // dedup by date+amount
                     List<Transaction> occ = dedupOccurrences(group);
-                    if (occ.size() < 3) continue;
+                    if (occ.size() < 2) continue;
 
                     // compute intervals
                     List<Long> intervals = new ArrayList<>();
@@ -143,6 +149,8 @@ public class RecurringDetectionService {
                     // consistency
                     boolean consistent = isConsistent(intervals, medianInterval, freq);
                     if (!consistent) continue;
+                    // Un paiement annuel ne s'observe qu'une fois par an : deux occurrences suffisent pour le proposer.
+                    if (occ.size() < 3 && freq != RecurringFrequency.YEARLY) continue;
 
                     // amount stats (absolute)
                     List<Long> amounts = new ArrayList<>();
@@ -164,7 +172,7 @@ public class RecurringDetectionService {
                     if (label.length() >= 8 && !GENERIC_LABELS.contains(label)) score += 10;
                     if (occ.get(0).getTransactionType() == TransactionType.EXPENSE) score += 5;
                     if (occ.stream().anyMatch(t -> t.getCategory() != null)) score += 5;
-                    score = Math.min(100, Math.max(0, score));
+                    score = Math.min(occ.size() < 3 ? 60 : 100, Math.max(0, score));
                     if (score < 40) continue;
 
                     // classification
@@ -187,9 +195,7 @@ public class RecurringDetectionService {
                     LocalDate nextDate = occ.get(occ.size() - 1).getBookingDate().plusDays(medianInterval);
 
                     // upsert
-                    RecurringSeries existing = seriesRepository
-                            .findByAccountAndLabelAndCurrency(account.getId(), label, currency)
-                            .orElse(null);
+                    RecurringSeries existing = findExisting(account.getId(), label, labels, mergedKey, currency);
 
                     if (existing != null) {
                         if (existing.getStatus() == RecurringSeriesStatus.DISMISSED) {
@@ -204,6 +210,7 @@ public class RecurringDetectionService {
                             existing.setStatus(RecurringSeriesStatus.CANDIDATE);
                             existing.setDismissedOccurrenceCount(0);
                         }
+                        label = existing.getNormalizedLabel();
                         existing.setFrequency(freq);
                         existing.setSeriesType(type);
                         existing.setUsualAmountMinor(usualAmt);
@@ -270,8 +277,20 @@ public class RecurringDetectionService {
         }
     }
 
+    /** Retrouve la serie deja creee sous une variante du libelle : aucune analyse ne doit creer de doublon. */
+    private RecurringSeries findExisting(UUID accountId, String label, Set<String> labels, String key, String currency) {
+        List<String> tries = new ArrayList<>(List.of(label, key));
+        tries.addAll(labels);
+        for (String candidate : tries) {
+            RecurringSeries found = seriesRepository.findByAccountAndLabelAndCurrency(accountId, candidate, currency).orElse(null);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     private boolean isCandidate(Transaction t) {
         if (t == null || t.getBookingDate() == null || t.getAmountMinor() == null) return false;
+        if (t.getCategory() != null && TRANSFER_CATEGORY.equals(t.getCategory().getId())) return false;
         if (t.getTransactionType() == TransactionType.TRANSFER) return false;
         if (t.getTransactionType() == TransactionType.REFUND) return false;
         if (t.getTransactionType() == TransactionType.INCOME) return false;

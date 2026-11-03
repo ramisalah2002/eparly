@@ -21,6 +21,20 @@
       "sector": "STREAMING",
       "officialWebsite": "https://www.disneyplus.com",
       "country": "FR"
+    },
+    {
+      "key": "sfr-mobile",
+      "name": "SFR",
+      "sector": "MOBILE_PLAN",
+      "officialWebsite": "https://www.sfr.fr",
+      "country": "FR"
+    },
+    {
+      "key": "sfr-internet",
+      "name": "SFR",
+      "sector": "INTERNET_BOX",
+      "officialWebsite": "https://www.sfr.fr",
+      "country": "FR"
     }
   ]
 }

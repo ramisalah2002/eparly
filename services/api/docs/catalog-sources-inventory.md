@@ -14,6 +14,34 @@ technique ne remplace pas la revue juridique. Aucune source n'est activée par d
 - **Écartées** : TCL (401), Twisto (licence non précisée, tarifs datés de 2024), Modulyx et Facture Futée (prix en texte
   libre), identifiants absents pour Tradedoubler, CJ et Admitad, Selectra payant.
 
+## Abonnements commerciaux : audit du 2 novembre 2026
+
+Aucune de ces sources n'est raccordée à la collecte automatique. Un `robots.txt` permissif n'est pas une autorisation :
+ce sont les conditions du site qui tranchent. Cet audit n'est pas un avis juridique.
+
+| Source | Données observées | Condition relevée | Décision |
+|---|---|---|---|
+| Orange, Sosh | Pages HTML (Sosh boutique : 403) | [Opposition expresse au moissonnage et à la fouille, art. L.122-5-3 CPI](https://www.sosh.fr/mentions-legales) | Bloquée |
+| Free Mobile | JSON-LD Product, brochure tarifaire PDF | [CGU](https://mobile.free.fr/docs/Conditions_generales_dutilisation.pdf) : aucune reproduction ni utilisation secondaire | Bloquée |
+| Freebox | Pages HTML, sans offre en JSON-LD | CGU Free non établies pour ce site | Bloquée, à confirmer |
+| SFR | JSON-LD Product (6 mobile, 4 box) | [Mentions légales](https://www.sfr.fr/mentions-legales.html) : aucune utilisation secondaire | Bloquée, import manuel en brouillon |
+| RED by SFR | Pages HTML | [Même clause que SFR](https://www.red-by-sfr.fr/mentions-legales/) | Bloquée |
+| Bouygues Telecom, B&YOU, Bbox | Pages HTML | [Reproduction interdite hors usage privatif](https://www.corporate.bouyguestelecom.fr/mentions-legales) ; `www.b-and-you.fr` injoignable | Bloquée |
+| Prixtel | Pages HTML | [Toute reproduction interdite](https://www.prixtel.com/mentions-legales/) | Bloquée |
+| Netflix | Aucune lecture | `robots.txt` : `Disallow: /` ; [conditions](https://help.netflix.com/legal/termsofuse) : robots et extraction interdits | Bloquée |
+| Disney+ | Aucune lecture | `robots.txt` : `Disallow: /` | Bloquée |
+| Prime Video / Amazon | Page HTML | Conditions non lues (403) | Bloquée, à confirmer |
+| Spotify | Page HTML | [Directives](https://www.spotify.com/fr/legal/user-guidelines/) : extraction automatisée interdite | Bloquée |
+| Deezer | Page HTML | [CGU](https://www.deezer.com/legal/cgu) : extraction par robots interdite, au moins pour la fouille de données | Bloquée |
+| Apple Music | Page HTML | [Conditions du site](https://www.apple.com/legal/internet-services/terms/site.html) : robots et page-scrape interdits | Bloquée |
+| Google One | JSON-LD Service | [Conditions](https://policies.google.com/terms) : automatisation permise si `robots.txt` respecté, mais prix en USD hors taxes | Inadaptée au marché français |
+| Dropbox | JSON-LD limité à l'offre gratuite | Non concluant | Inadaptée |
+| Proton, Infomaniak | Aucun prix dans le HTML | Pas d'API publique documentée trouvée | Inadaptée |
+| pCloud, Microsoft OneDrive | Page injoignable depuis ce robot | Microsoft : reproduction interdite | Non exploitable |
+
+Pour raccorder une de ces sources, il faut un accord écrit de l'éditeur ou un flux partenaire. Une source accordée passe
+ensuite par `catalog_sync_sources` et le connecteur générique, sans nouveau scheduler.
+
 ## Synthèse
 
 | Source | Statut | Catégories | Accès | Connecteur |

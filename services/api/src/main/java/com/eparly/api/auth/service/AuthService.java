@@ -178,7 +178,7 @@ public class AuthService {
         rateLimiter.checkPreLogin(clientIp, email);
 
         User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
-        String hash = user == null ? dummyPasswordHash : user.getPasswordHash();
+        String hash = user == null || user.getPasswordHash() == null ? dummyPasswordHash : user.getPasswordHash();
         boolean passwordMatches = passwordEncoder.matches(request.password(), hash);
         if (!passwordMatches || user == null || user.getStatus() != UserStatus.ACTIVE) {
             rateLimiter.recordLoginFailure(clientIp, email);
