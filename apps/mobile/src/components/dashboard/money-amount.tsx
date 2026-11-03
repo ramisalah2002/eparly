@@ -5,7 +5,7 @@ import { BRAND_COLORS } from '@/constants/colors';
 import { FONT_FAMILY } from '@/constants/typography';
 import { parseMoneyParts } from '@/utils/formatters';
 
-export type MoneyAmountSize = 'hero' | 'editorial' | 'subcard' | 'compact';
+export type MoneyAmountSize = 'hero' | 'editorial' | 'subcard' | 'compact' | 'row';
 
 export interface MoneyAmountProps {
   amountMinor: number | null | undefined;
@@ -257,6 +257,44 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 2,
     lineHeight: 18,
+  },
+
+  // ROW VARIANT (e.g. Transaction activity feed rows: consistent 15px baseline alignment)
+  rowInteger: {
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    fontVariant: ['tabular-nums'],
+    lineHeight: 20,
+  },
+  rowDecimal: {
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    fontVariant: ['tabular-nums'],
+    lineHeight: 20,
+  },
+  rowCurrency: {
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    lineHeight: 20,
+  },
+  rowSign: {
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  rowHiddenText: {
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 2,
+    lineHeight: 20,
   },
 });
 

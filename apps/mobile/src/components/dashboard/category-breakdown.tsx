@@ -1,11 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInUp,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   Car,
   Coffee,
@@ -14,11 +22,13 @@ import {
   ShoppingBag,
 } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
 import { FONT_FAMILY } from '@/constants/typography';
-import { Spacing } from '@/constants/theme';
 import { DemoCategoryItem } from '@/features/dashboard/demo/dashboard-demo-data';
 import { computeCategoryShare } from '@/utils/formatters';
+import { triggerHaptic } from '@/utils/haptics';
 
 import { MoneyAmount } from './money-amount';
 
@@ -99,17 +109,18 @@ export function CategoryBreakdown({
         </View>
 
         {hasSelection ? (
-          <Pressable
-            onPress={() => setSelectedCategoryId(null)}
-            style={({ pressed }) => [
-              styles.resetBadge,
-              pressed && styles.buttonPressed,
-            ]}
+          <AnimatedPressable
+            onPress={() => {
+              triggerHaptic.light();
+              setSelectedCategoryId(null);
+            }}
+            scaleTarget={MOTION.scale.buttonPress}
+            style={styles.resetBadge}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Show all categories"
             accessibilityRole="button">
             <Text style={styles.resetBadgeText}>Show all</Text>
-          </Pressable>
+          </AnimatedPressable>
         ) : (
           <View
             style={styles.periodBadge}
@@ -169,27 +180,20 @@ export function CategoryBreakdown({
           const isDimmed = hasSelection && !isSelected;
           const color = getCategoryColor(cat);
           const flexValue = Math.max(cat.amountMinor / effectiveTotalMinor, 0.05);
+          const share = computeCategoryShare(cat.amountMinor, effectiveTotalMinor);
 
           return (
-            <Pressable
+            <AnimatedSegmentPiece
               key={cat.id}
+              category={cat}
+              color={color}
+              flexValue={flexValue}
+              isSelected={isSelected}
+              isDimmed={isDimmed}
+              isFirst={index === 0}
+              isLast={index === categories.length - 1}
               onPress={() => handleToggleCategory(cat.id)}
-              hitSlop={{ top: 12, bottom: 12, left: 2, right: 2 }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${cat.name}, ${computeCategoryShare(cat.amountMinor, effectiveTotalMinor)}%`}
-              accessibilityHint={isSelected ? 'Selected. Tap to return to total view' : 'Tap to focus on this category'}
-              style={[
-                styles.segmentPiece,
-                {
-                  flex: flexValue,
-                  backgroundColor: color,
-                  opacity: isDimmed ? 0.65 : 1,
-                },
-                index === 0 && styles.firstSegment,
-                index === categories.length - 1 && styles.lastSegment,
-                isSelected && styles.selectedSegment,
-              ]}
+              share={share}
             />
           );
         })}
@@ -202,82 +206,19 @@ export function CategoryBreakdown({
           const color = getCategoryColor(cat);
           const share = computeCategoryShare(cat.amountMinor, effectiveTotalMinor);
 
-          const accessibleAmount = isBalanceHidden
-            ? 'amount hidden'
-            : `${Math.round(cat.amountMinor / 100)} euros`;
-
           return (
             <Animated.View
               key={cat.id}
               entering={FadeInUp.duration(350).delay(index * 30)}>
-              <Pressable
+              <AnimatedCategoryRow
+                category={cat}
+                color={color}
+                share={share}
+                isSelected={isSelected}
+                isBalanceHidden={isBalanceHidden}
                 onPress={() => handleToggleCategory(cat.id)}
-                style={({ pressed }) => [
-                  styles.categoryRow,
-                  isSelected && styles.categoryRowSelected,
-                  pressed && styles.rowPressed,
-                ]}
-                accessible
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={`${cat.name}, ${share}% of spending, ${accessibleAmount}`}
-                accessibilityHint={isSelected ? 'Selected. Tap to return to total view' : 'Tap to focus on this category'}>
-                {/* Left Section: 3px Vertical Accent Bar + Category Icon Circle + Name */}
-                <View style={styles.categoryLeft}>
-                  {isSelected ? (
-                    <View
-                      style={[
-                        styles.activeAccentBar,
-                        { backgroundColor: color },
-                      ]}
-                    />
-                  ) : (
-                    <View style={styles.inactiveAccentPlaceholder} />
-                  )}
-
-                  <View
-                    style={[
-                      styles.categoryIconCircle,
-                      { backgroundColor: `${color}18` },
-                      isSelected && {
-                        borderColor: `${color}40`,
-                        borderWidth: 1,
-                      },
-                    ]}>
-                    {getCategoryIcon(cat.id, color)}
-                  </View>
-
-                  <Text
-                    style={[
-                      styles.categoryName,
-                      isSelected && styles.categoryNameSelected,
-                    ]}
-                    numberOfLines={1}>
-                    {cat.name}
-                  </Text>
-                </View>
-
-                {/* Right Section: Tabular Amount + Percentage */}
-                <View style={styles.categoryRight}>
-                  <MoneyAmount
-                    amountMinor={cat.amountMinor}
-                    currency="EUR"
-                    locale="en-IE"
-                    isHidden={isBalanceHidden}
-                    size="subcard"
-                    hideDecimals
-                    color={BRAND_COLORS.darkCharcoal}
-                    accessibilityLabelPrefix={`${cat.name} amount`}
-                  />
-                  <Text
-                    style={[
-                      styles.percentageText,
-                      isSelected && { color: color, fontFamily: FONT_FAMILY.bold },
-                    ]}>
-                    {share}%
-                  </Text>
-                </View>
-              </Pressable>
+                renderIcon={getCategoryIcon}
+              />
             </Animated.View>
           );
         })}
@@ -286,20 +227,197 @@ export function CategoryBreakdown({
   );
 }
 
+interface SegmentPieceProps {
+  category: DemoCategoryItem;
+  color: string;
+  flexValue: number;
+  isSelected: boolean;
+  isDimmed: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onPress: () => void;
+  share: string;
+}
+
+function AnimatedSegmentPiece({
+  category,
+  color,
+  flexValue,
+  isSelected,
+  isDimmed,
+  isFirst,
+  isLast,
+  onPress,
+  share,
+}: SegmentPieceProps) {
+  const isReduced = useReducedMotion();
+  const opacity = useSharedValue(isDimmed ? 0.45 : 1);
+
+  useEffect(() => {
+    opacity.value = isReduced
+      ? (isDimmed ? 0.45 : 1)
+      : withTiming(isDimmed ? 0.45 : 1, { duration: 160 });
+  }, [isDimmed, isReduced, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        styles.segmentPieceWrapper,
+        { flex: flexValue },
+        animatedStyle,
+      ]}>
+      <Pressable
+        onPress={() => {
+          triggerHaptic.selection();
+          onPress();
+        }}
+        hitSlop={{ top: 12, bottom: 12, left: 2, right: 2 }}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+        accessibilityLabel={`${category.name}, ${share}%`}
+        accessibilityHint={isSelected ? 'Selected. Tap to return to total view' : 'Tap to focus on this category'}
+        style={[
+          styles.segmentPiece,
+          { backgroundColor: color },
+          isFirst && styles.firstSegment,
+          isLast && styles.lastSegment,
+          isSelected && styles.selectedSegment,
+        ]}
+      />
+    </Animated.View>
+  );
+}
+
+interface CategoryRowProps {
+  category: DemoCategoryItem;
+  color: string;
+  share: string;
+  isSelected: boolean;
+  isBalanceHidden: boolean;
+  onPress: () => void;
+  renderIcon: (id: string, color: string) => React.ReactNode;
+}
+
+function AnimatedCategoryRow({
+  category,
+  color,
+  share,
+  isSelected,
+  isBalanceHidden,
+  onPress,
+  renderIcon,
+}: CategoryRowProps) {
+  const isReduced = useReducedMotion();
+  const barProgress = useSharedValue(isSelected ? 1 : 0);
+
+  useEffect(() => {
+    barProgress.value = isReduced
+      ? (isSelected ? 1 : 0)
+      : withSpring(isSelected ? 1 : 0, MOTION.spring.selection);
+  }, [isSelected, isReduced, barProgress]);
+
+  const barAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: barProgress.value,
+    transform: [{ scaleY: barProgress.value }],
+  }));
+
+  const accessibleAmount = isBalanceHidden
+    ? 'amount hidden'
+    : `${Math.round(category.amountMinor / 100)} euros`;
+
+  return (
+    <AnimatedPressable
+      onPress={() => {
+        triggerHaptic.selection();
+        onPress();
+      }}
+      scaleTarget={MOTION.scale.cardPress}
+      activeOpacity={0.94}
+      style={[
+        styles.categoryRow,
+        isSelected && styles.categoryRowSelected,
+      ]}
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      accessibilityLabel={`${category.name}, ${share}% of spending, ${accessibleAmount}`}
+      accessibilityHint={isSelected ? 'Selected. Tap to return to total view' : 'Tap to focus on this category'}>
+      {/* Left Section: 3px Animated Vertical Accent Bar + Category Icon Circle + Name */}
+      <View style={styles.categoryLeft}>
+        <View style={styles.accentBarSlot}>
+          <Animated.View
+            style={[
+              styles.activeAccentBar,
+              { backgroundColor: color },
+              barAnimatedStyle,
+            ]}
+          />
+        </View>
+
+        <View
+          style={[
+            styles.categoryIconCircle,
+            { backgroundColor: `${color}18` },
+            isSelected && {
+              borderColor: `${color}40`,
+              borderWidth: 1,
+            },
+          ]}>
+          {renderIcon(category.id, color)}
+        </View>
+
+        <Text
+          style={[
+            styles.categoryName,
+            isSelected && styles.categoryNameSelected,
+          ]}
+          numberOfLines={1}>
+          {category.name}
+        </Text>
+      </View>
+
+      {/* Right Section: Tabular Amount + Percentage */}
+      <View style={styles.categoryRight}>
+        <MoneyAmount
+          amountMinor={category.amountMinor}
+          currency="EUR"
+          locale="en-IE"
+          isHidden={isBalanceHidden}
+          size="subcard"
+          hideDecimals
+          color={BRAND_COLORS.darkCharcoal}
+          accessibilityLabelPrefix={`${category.name} amount`}
+        />
+        <Text
+          style={[
+            styles.percentageText,
+            isSelected && { color: color, fontFamily: FONT_FAMILY.bold },
+          ]}>
+          {share}%
+        </Text>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
 const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: BRAND_COLORS.pureWhite,
     borderRadius: 24,
     padding: 20,
-    paddingBottom: 16,
+    paddingBottom: 18,
     borderWidth: 1,
     borderColor: 'rgba(168, 155, 190, 0.20)',
     shadowColor: BRAND_COLORS.darkCharcoal,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 10,
     elevation: 2,
-    marginBottom: Spacing.three,
+    marginBottom: 14,
   },
   headerRow: {
     flexDirection: 'row',
@@ -320,8 +438,8 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: FONT_FAMILY.regular,
-    fontSize: 12.5,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '400',
     color: BRAND_COLORS.secondaryText,
     marginTop: 2,
@@ -417,6 +535,9 @@ const styles = StyleSheet.create({
     gap: 2,
     marginBottom: 14,
   },
+  segmentPieceWrapper: {
+    height: '100%',
+  },
   segmentPiece: {
     height: '100%',
   },
@@ -456,16 +577,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 10,
   },
+  accentBarSlot: {
+    width: 3,
+    height: 22,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   activeAccentBar: {
     width: 3,
     height: 22,
     borderRadius: 1.5,
-    marginRight: 8,
-  },
-  inactiveAccentPlaceholder: {
-    width: 3,
-    height: 22,
-    marginRight: 8,
   },
   categoryIconCircle: {
     width: 32,

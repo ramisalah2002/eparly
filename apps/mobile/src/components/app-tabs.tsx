@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Tabs,
@@ -24,7 +30,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
 import { FONT_FAMILY } from '@/constants/typography';
+import { triggerHaptic } from '@/utils/haptics';
 
 export default function AppTabs() {
   return (
@@ -88,13 +96,34 @@ export function TabButton({
     [key: string]: unknown;
   };
 
+  const isReduced = useReducedMotion();
+  const iconScale = useSharedValue(isFocused ? 1.06 : 1);
+
+  useEffect(() => {
+    iconScale.value = isReduced
+      ? (isFocused ? 1.06 : 1)
+      : withSpring(isFocused ? 1.06 : 1, MOTION.spring.selection);
+  }, [isFocused, isReduced, iconScale]);
+
+  const animatedIconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconScale.value }],
+  }));
+
   const activeColor = BRAND_COLORS.deepLavender;
   const inactiveColor = BRAND_COLORS.secondaryText;
   const currentColor = isFocused ? activeColor : inactiveColor;
 
+  const handlePress = (event: any) => {
+    triggerHaptic.selection();
+    if (typeof (pressableProps as any).onPress === 'function') {
+      (pressableProps as any).onPress(event);
+    }
+  };
+
   return (
     <Pressable
       {...(pressableProps as any)}
+      onPress={handlePress}
       style={({ pressed }) => [
         styles.tabButton,
         pressed && styles.tabButtonPressed,
@@ -102,13 +131,14 @@ export function TabButton({
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused }}
       accessibilityLabel={`${label}, tab`}>
-      <View
+      <Animated.View
         style={[
           styles.iconCapsule,
           isFocused ? styles.iconCapsuleActive : styles.iconCapsuleInactive,
+          animatedIconStyle,
         ]}>
         {renderIcon(currentColor)}
-      </View>
+      </Animated.View>
       <Text
         style={[
           styles.tabLabel,

@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -17,7 +16,9 @@ import Svg, {
 } from 'react-native-svg';
 import { ArrowUpRight } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
 import { FONT_FAMILY } from '@/constants/typography';
 
 export interface QuickActionItem {
@@ -257,12 +258,14 @@ export function QuickActionsSection({
               key={item.id}
               style={styles.cardWrapper}
               {...animationProps}>
-              <Pressable
+              <AnimatedPressable
                 onPress={item.onPress}
-                style={({ pressed }) => [
+                scaleTarget={MOTION.scale.cardPress}
+                haptic="light"
+                activeOpacity={0.94}
+                style={[
                   styles.cardPressable,
                   { backgroundColor: item.backgroundColor },
-                  pressed && styles.cardPressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={`${item.title}, ${item.descriptor}`}
@@ -294,7 +297,7 @@ export function QuickActionsSection({
                     />
                   </View>
                 </View>
-              </Pressable>
+              </AnimatedPressable>
             </CardContainer>
           );
         })}
@@ -306,22 +309,22 @@ export function QuickActionsSection({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: 2,
+    marginBottom: 16,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
     paddingHorizontal: 2,
   },
   sectionHeading: {
     fontFamily: FONT_FAMILY.bold,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: '700',
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
     color: BRAND_COLORS.darkCharcoal,
   },
   gridContainer: {
@@ -340,10 +343,6 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 12,
     justifyContent: 'space-between',
-  },
-  cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
   },
   cardTopArea: {
     alignItems: 'flex-start',

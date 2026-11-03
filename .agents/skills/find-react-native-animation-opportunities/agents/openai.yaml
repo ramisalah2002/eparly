@@ -1,0 +1,12 @@
+interface:
+  display_name: Find RN Animation Opportunities
+  short_description: Find restrained native motion opportunities
+  default_prompt: Use $find-react-native-animation-opportunities to find high-value
+    missing motion in this Expo or React Native UI without editing source.
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

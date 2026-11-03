@@ -1,22 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInUp,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import {
   ArrowDownRight,
   ArrowUpRight,
   Calendar,
-  Sparkles,
 } from 'lucide-react-native';
 
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
 import { FONT_FAMILY } from '@/constants/typography';
-import { Spacing } from '@/constants/theme';
 import { DemoMonthlySpending } from '@/features/dashboard/demo/dashboard-demo-data';
+import { triggerHaptic } from '@/utils/haptics';
 
 import { MoneyAmount } from './money-amount';
 
@@ -94,14 +101,11 @@ export function SpendingChart({
 
   return (
     <View style={styles.cardContainer}>
-      {/* 1. Header: Section Eyebrow & Period Selector */}
+      {/* 1. Header: Section Title & Period Selector */}
       <View style={styles.headerRow}>
         <View style={styles.titleColumn}>
-          <View style={styles.eyebrowRow}>
-            <Sparkles size={11} color={BRAND_COLORS.deepLavender} strokeWidth={2.4} />
-            <Text style={styles.eyebrowText}>SPENDING ACTIVITY</Text>
-          </View>
-          <Text style={styles.sectionTitle}>Your spending over time</Text>
+          <Text style={styles.title}>Spending activity</Text>
+          <Text style={styles.subtitle}>Your spending over time</Text>
         </View>
 
         <View
@@ -206,82 +210,20 @@ export function SpendingChart({
               minBarHeight
             );
 
-            const accessibleAmount = isBalanceHidden
-              ? 'spending hidden'
-              : `spending ${Math.round(item.amountMinor / 100)} euros`;
-
             return (
-              <Animated.View
+              <ChartPillarItem
                 key={item.monthKey}
-                entering={FadeInUp.duration(380).delay(index * 35)}
-                style={styles.columnContainer}>
-                <Pressable
-                  onPress={() => setSelectedKey(item.monthKey)}
-                  style={({ pressed }) => [
-                    styles.columnPressable,
-                    pressed && styles.columnPressed,
-                  ]}
-                  accessible
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={`${item.monthFull}, ${accessibleAmount}`}
-                  accessibilityHint={isSelected ? 'Currently selected' : 'Tap to inspect month'}>
-                  {/* Floating active amount tooltip chip */}
-                  <View style={styles.tooltipSlot}>
-                    {isSelected ? (
-                      <Animated.View
-                        entering={FadeIn.duration(180)}
-                        style={styles.floatingAmountPill}>
-                        <Text style={styles.floatingAmountText}>
-                          {isBalanceHidden ? '•••' : `€${Math.round(item.amountMinor / 100)}`}
-                        </Text>
-                      </Animated.View>
-                    ) : null}
-                  </View>
-
-                  {/* Pillar Rail & Filled Bar */}
-                  <View style={[styles.pillarTrack, { height: barTrackHeight }]}>
-                    <View
-                      style={[
-                        styles.pillarFill,
-                        {
-                          height: barHeight,
-                          backgroundColor: isSelected
-                            ? BRAND_COLORS.deepLavender
-                            : '#DFD7E8',
-                        },
-                        isSelected && styles.selectedPillarGlow,
-                      ]}>
-                      {/* Luminous Top Cap for Active Pillar */}
-                      {isSelected && <View style={styles.pillarTopGlint} />}
-                    </View>
-                  </View>
-
-                  {/* Baseline Anchor Rule */}
-                  <View
-                    style={[
-                      styles.baselineStep,
-                      isSelected && styles.selectedBaselineStep,
-                    ]}
-                  />
-
-                  {/* Month Label with Polished Indicator */}
-                  <View style={styles.labelWrapper}>
-                    <Text
-                      style={[
-                        styles.monthLabel,
-                        isSelected && styles.selectedMonthLabel,
-                      ]}>
-                      {item.monthShort}
-                    </Text>
-                    {isSelected ? (
-                      <View style={styles.activePillMarker} />
-                    ) : (
-                      <View style={styles.inactiveMarkerSpacer} />
-                    )}
-                  </View>
-                </Pressable>
-              </Animated.View>
+                item={item}
+                index={index}
+                isSelected={isSelected}
+                barHeight={barHeight}
+                barTrackHeight={barTrackHeight}
+                isBalanceHidden={isBalanceHidden}
+                onSelect={() => {
+                  triggerHaptic.selection();
+                  setSelectedKey(item.monthKey);
+                }}
+              />
             );
           })}
         </View>
@@ -307,6 +249,112 @@ export function SpendingChart({
   );
 }
 
+interface ChartPillarItemProps {
+  item: DemoMonthlySpending;
+  index: number;
+  isSelected: boolean;
+  barHeight: number;
+  barTrackHeight: number;
+  isBalanceHidden: boolean;
+  onSelect: () => void;
+}
+
+function ChartPillarItem({
+  item,
+  index,
+  isSelected,
+  barHeight,
+  barTrackHeight,
+  isBalanceHidden,
+  onSelect,
+}: ChartPillarItemProps) {
+  const shouldReduceMotion = useReducedMotion();
+  const selectProgress = useSharedValue(isSelected ? 1 : 0);
+
+  useEffect(() => {
+    if (shouldReduceMotion) {
+      selectProgress.value = isSelected ? 1 : 0;
+    } else {
+      selectProgress.value = withSpring(isSelected ? 1 : 0, MOTION.spring.selection);
+    }
+  }, [isSelected, shouldReduceMotion, selectProgress]);
+
+  const animatedFillStyle = useAnimatedStyle(() => ({
+    backgroundColor: selectProgress.value > 0.5 ? BRAND_COLORS.deepLavender : '#DFD7E8',
+  }));
+
+  const animatedMarkerStyle = useAnimatedStyle(() => ({
+    opacity: selectProgress.value,
+    transform: [{ scaleX: selectProgress.value }],
+  }));
+
+  const accessibleAmount = isBalanceHidden
+    ? 'spending hidden'
+    : `spending ${Math.round(item.amountMinor / 100)} euros`;
+
+  return (
+    <Animated.View
+      entering={FadeInUp.duration(380).delay(index * 35)}
+      style={styles.columnContainer}>
+      <Pressable
+        onPress={onSelect}
+        style={({ pressed }) => [
+          styles.columnPressable,
+          pressed && styles.columnPressed,
+        ]}
+        accessible
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+        accessibilityLabel={`${item.monthFull}, ${accessibleAmount}`}
+        accessibilityHint={isSelected ? 'Currently selected' : 'Tap to inspect month'}>
+        {/* Floating active amount tooltip chip */}
+        <View style={styles.tooltipSlot}>
+          {isSelected ? (
+            <Animated.View entering={FadeIn.duration(160)} style={styles.floatingAmountPill}>
+              <Text style={styles.floatingAmountText}>
+                {isBalanceHidden ? '•••' : `€${Math.round(item.amountMinor / 100)}`}
+              </Text>
+            </Animated.View>
+          ) : null}
+        </View>
+
+        {/* Pillar Rail & Filled Bar */}
+        <View style={[styles.pillarTrack, { height: barTrackHeight }]}>
+          <Animated.View
+            style={[
+              styles.pillarFill,
+              { height: barHeight },
+              animatedFillStyle,
+              isSelected && styles.selectedPillarGlow,
+            ]}>
+            {isSelected && <View style={styles.pillarTopGlint} />}
+          </Animated.View>
+        </View>
+
+        {/* Baseline Anchor Rule */}
+        <View
+          style={[
+            styles.baselineStep,
+            isSelected && styles.selectedBaselineStep,
+          ]}
+        />
+
+        {/* Month Label with Polished Dynamic Indicator */}
+        <View style={styles.labelWrapper}>
+          <Text
+            style={[
+              styles.monthLabel,
+              isSelected && styles.selectedMonthLabel,
+            ]}>
+            {item.monthShort}
+          </Text>
+          <Animated.View style={[styles.activePillMarker, animatedMarkerStyle]} />
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: BRAND_COLORS.pureWhite,
@@ -315,13 +363,13 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 18,
     borderWidth: 1,
-    borderColor: 'rgba(168, 155, 190, 0.16)',
+    borderColor: 'rgba(168, 155, 190, 0.20)',
     shadowColor: BRAND_COLORS.darkCharcoal,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
-    marginBottom: Spacing.three,
+    marginBottom: 14,
   },
   headerRow: {
     flexDirection: 'row',
@@ -332,25 +380,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 8,
   },
-  eyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 4,
-  },
-  eyebrowText: {
+  title: {
     fontFamily: FONT_FAMILY.bold,
-    fontSize: 10.5,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: '700',
-    color: BRAND_COLORS.deepLavender,
-    letterSpacing: 0.8,
+    color: BRAND_COLORS.darkCharcoal,
+    letterSpacing: -0.3,
   },
-  sectionTitle: {
+  subtitle: {
     fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     lineHeight: 17,
     fontWeight: '400',
     color: BRAND_COLORS.secondaryText,
+    marginTop: 2,
     letterSpacing: -0.1,
   },
   periodBadge: {

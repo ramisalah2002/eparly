@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
 import React, { useEffect } from 'react';
 import {
-  Platform,
   StyleSheet,
   Text,
   useWindowDimensions,

@@ -1,0 +1,12 @@
+interface:
+  display_name: Apple Design for React Native
+  short_description: Apply fluid Apple interaction principles in RN
+  default_prompt: Use $apple-design-react-native to shape this Expo interaction with
+    fluid Apple design principles.
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

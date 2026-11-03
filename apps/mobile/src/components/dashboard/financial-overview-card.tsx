@@ -1,15 +1,16 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { ArrowDownLeft, ArrowUpRight, Eye, EyeOff } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
 import { FONT_FAMILY } from '@/constants/typography';
-import { Spacing } from '@/constants/theme';
 import {
   DemoBalanceOverview,
   DemoCashFlow,
@@ -52,33 +53,38 @@ export function FinancialOverviewCard({
           <Text style={styles.eyebrowText}>Total balance</Text>
         </View>
 
-        <Pressable
+        <AnimatedPressable
           onPress={onToggleBalanceVisibility}
-          style={({ pressed }) => [
-            styles.eyeButton,
-            pressed && styles.buttonPressed,
-          ]}
+          haptic="selection"
+          scaleTarget={MOTION.scale.buttonPress}
+          style={styles.eyeButton}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel={isBalanceHidden ? 'Show balance' : 'Hide balance'}
           accessibilityRole="button">
-          {isBalanceHidden ? (
-            <Eye size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2} />
-          ) : (
-            <EyeOff size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2} />
-          )}
-        </Pressable>
+          <Animated.View key={isBalanceHidden ? 'eye-hidden' : 'eye-visible'} entering={FadeIn.duration(140)}>
+            {isBalanceHidden ? (
+              <Eye size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2} />
+            ) : (
+              <EyeOff size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2} />
+            )}
+          </Animated.View>
+        </AnimatedPressable>
       </View>
 
       {/* 2. Hero Monetary Section: Bold Amount & Account Scope */}
       <View style={styles.balanceContainer}>
-        <MoneyAmount
-          amountMinor={balance.totalBalanceMinor}
-          currency={balance.currency || 'EUR'}
-          locale="en-IE"
-          isHidden={isBalanceHidden}
-          size="hero"
-          accessibilityLabelPrefix="Total balance"
-        />
+        <Animated.View
+          key={isBalanceHidden ? 'bal-hidden' : 'bal-visible'}
+          entering={FadeIn.duration(160)}>
+          <MoneyAmount
+            amountMinor={balance.totalBalanceMinor}
+            currency={balance.currency || 'EUR'}
+            locale="en-IE"
+            isHidden={isBalanceHidden}
+            size="hero"
+            accessibilityLabelPrefix="Total balance"
+          />
+        </Animated.View>
         <View style={styles.accountScopeRow}>
           <Text style={styles.accountsDetail}>{balance.accountsLabel}</Text>
         </View>
@@ -98,7 +104,10 @@ export function FinancialOverviewCard({
             <Text style={styles.flowTypeLabel}>Income</Text>
             <Text style={styles.flowPeriodTag}>· {dynamicPeriod}</Text>
           </View>
-          <View style={styles.amountWrapper}>
+          <Animated.View
+            key={isBalanceHidden ? 'income-hidden' : 'income-visible'}
+            entering={FadeIn.duration(160)}
+            style={styles.amountWrapper}>
             <MoneyAmount
               amountMinor={cashFlow.incomeMinor}
               currency={balance.currency || 'EUR'}
@@ -108,7 +117,7 @@ export function FinancialOverviewCard({
               color={BRAND_COLORS.darkCharcoal}
               accessibilityLabelPrefix={`Income for ${dynamicPeriod}`}
             />
-          </View>
+          </Animated.View>
         </View>
 
         {/* Vertical subtle divider between columns */}
@@ -123,7 +132,10 @@ export function FinancialOverviewCard({
             <Text style={styles.flowTypeLabel}>Expenses</Text>
             <Text style={styles.flowPeriodTag}>· {dynamicPeriod}</Text>
           </View>
-          <View style={styles.amountWrapper}>
+          <Animated.View
+            key={isBalanceHidden ? 'expense-hidden' : 'expense-visible'}
+            entering={FadeIn.duration(160)}
+            style={styles.amountWrapper}>
             <MoneyAmount
               amountMinor={cashFlow.expensesMinor}
               currency={balance.currency || 'EUR'}
@@ -133,7 +145,7 @@ export function FinancialOverviewCard({
               color={BRAND_COLORS.darkCharcoal}
               accessibilityLabelPrefix={`Expenses for ${dynamicPeriod}`}
             />
-          </View>
+          </Animated.View>
         </View>
       </View>
     </View>
@@ -153,7 +165,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 10,
     elevation: 2,
-    marginBottom: Spacing.three,
+    marginBottom: 14,
   },
   headerRow: {
     flexDirection: 'row',
@@ -197,10 +209,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 3,
     elevation: 1,
-  },
-  buttonPressed: {
-    transform: [{ scale: 0.94 }],
-    opacity: 0.88,
   },
   balanceContainer: {
     marginTop: 10,

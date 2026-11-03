@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   Alert,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Bell } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
 import { FONT_FAMILY } from '@/constants/typography';
 import { MaxContentWidth } from '@/constants/theme';
 import {
@@ -91,12 +92,11 @@ export function DashboardHeader({
 
         {/* Right Section: Refined 36px Utility Cluster */}
         <View style={styles.rightActions}>
-          <Pressable
+          <AnimatedPressable
             onPress={handleNotificationPress}
-            style={({ pressed }) => [
-              styles.iconButton,
-              pressed && styles.buttonPressed,
-            ]}
+            scaleTarget={MOTION.scale.buttonPress}
+            haptic="light"
+            style={styles.iconButton}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             accessibilityLabel="Notifications"
             accessibilityRole="button">
@@ -104,21 +104,20 @@ export function DashboardHeader({
               <Bell size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2} />
               {hasUnreadNotification && <View style={styles.notificationDot} />}
             </View>
-          </Pressable>
+          </AnimatedPressable>
 
-          <Pressable
+          <AnimatedPressable
             onPress={handleProfilePress}
-            style={({ pressed }) => [
-              styles.avatarButton,
-              pressed && styles.buttonPressed,
-            ]}
+            scaleTarget={MOTION.scale.buttonPress}
+            haptic="light"
+            style={styles.avatarButton}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             accessibilityLabel="Open user profile"
             accessibilityRole="button">
             <View style={styles.avatarSurface}>
               <Text style={styles.avatarInitials}>{cleanInitials}</Text>
             </View>
-          </Pressable>
+          </AnimatedPressable>
         </View>
       </View>
     </View>

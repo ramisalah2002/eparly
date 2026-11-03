@@ -341,18 +341,23 @@ export function computeCategoryShare(amountMinor: number, totalMinor: number): s
 export interface TransactionDateGroup<T> {
   id: string;
   title: string;
+  dateKey: string;
   transactions: T[];
 }
 
 export interface GroupTransactionsOptions {
   referenceDate?: Date | string;
+  locale?: string;
 }
 
 /**
- * Groups transactions into editorial date sections: "Today", "Yesterday", and "Earlier".
- * Evaluates local calendar days to prevent timezone off-by-one errors.
+ * Groups transactions into editorial calendar date sections ("Today", "Yesterday", or "29 October").
+ * Accurately parses transaction calendar dates (YYYY-MM-DD or bookingDate) without timezone shifts,
+ * groups transactions from the same day under a single heading, and eliminates fake dates.
  */
-export function groupTransactionsByDate<T extends { date?: string; dateLabel?: string }>(
+export function groupTransactionsByDate<
+  T extends { date?: string; bookingDate?: string; dateLabel?: string }
+>(
   transactions: T[],
   options: GroupTransactionsOptions = {}
 ): TransactionDateGroup<T>[] {
@@ -360,54 +365,101 @@ export function groupTransactionsByDate<T extends { date?: string; dateLabel?: s
     return [];
   }
 
-  // Reference date: default to demo Oct 29, 2026 if not specified
+  const locale = options.locale || 'en-IE';
+
+  // Evaluate reference date relative to the user's current day
   const ref = options.referenceDate
     ? (typeof options.referenceDate === 'string' ? new Date(options.referenceDate) : options.referenceDate)
-    : new Date(2026, 9, 29);
+    : new Date();
 
-  const refMidnight = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()).getTime();
+  const refYear = ref.getFullYear();
+  const refMonth = ref.getMonth();
+  const refDay = ref.getDate();
+  const refMidnight = new Date(refYear, refMonth, refDay).getTime();
 
-  const groupsMap = new Map<string, { id: string; title: string; transactions: T[] }>();
-  groupsMap.set('today', { id: 'today', title: 'Today', transactions: [] });
-  groupsMap.set('yesterday', { id: 'yesterday', title: 'Yesterday', transactions: [] });
-  groupsMap.set('earlier', { id: 'earlier', title: 'Earlier', transactions: [] });
+  const groupsMap = new Map<string, TransactionDateGroup<T>>();
 
   for (const tx of transactions) {
-    let txDate: Date | null = null;
-    if (tx.date) {
-      const parts = tx.date.split('-');
-      if (parts.length === 3) {
-        txDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    let year: number | null = null;
+    let monthIndex: number | null = null; // 0-indexed
+    let day: number | null = null;
+
+    const rawDateStr = tx.date || tx.bookingDate;
+
+    if (rawDateStr) {
+      const match = rawDateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        year = parseInt(match[1], 10);
+        monthIndex = parseInt(match[2], 10) - 1;
+        day = parseInt(match[3], 10);
       } else {
-        txDate = new Date(tx.date);
+        const parsed = new Date(rawDateStr);
+        if (!isNaN(parsed.getTime())) {
+          year = parsed.getFullYear();
+          monthIndex = parsed.getMonth();
+          day = parsed.getDate();
+        }
       }
     } else if (tx.dateLabel) {
       const match = tx.dateLabel.match(/([A-Za-z]+)\s*(\d{1,2})/);
       if (match) {
         const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        const monthIndex = monthNames.findIndex((m) => match[1].toLowerCase().startsWith(m));
-        if (monthIndex >= 0) {
-          txDate = new Date(2026, monthIndex, parseInt(match[2], 10));
+        const foundIndex = monthNames.findIndex((m) => match[1].toLowerCase().startsWith(m));
+        if (foundIndex >= 0) {
+          year = refYear;
+          monthIndex = foundIndex;
+          day = parseInt(match[2], 10);
         }
       }
     }
 
-    if (!txDate || isNaN(txDate.getTime())) {
-      groupsMap.get('earlier')!.transactions.push(tx);
+    if (year === null || monthIndex === null || day === null) {
+      const undatedKey = 'undated';
+      if (!groupsMap.has(undatedKey)) {
+        groupsMap.set(undatedKey, {
+          id: undatedKey,
+          title: 'Recent',
+          dateKey: undatedKey,
+          transactions: [],
+        });
+      }
+      groupsMap.get(undatedKey)!.transactions.push(tx);
       continue;
     }
 
-    const txMidnight = new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate()).getTime();
+    const txMidnight = new Date(year, monthIndex, day).getTime();
     const diffDays = Math.round((refMidnight - txMidnight) / (24 * 60 * 60 * 1000));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
 
-    if (diffDays === 0) {
-      groupsMap.get('today')!.transactions.push(tx);
-    } else if (diffDays === 1) {
-      groupsMap.get('yesterday')!.transactions.push(tx);
-    } else {
-      groupsMap.get('earlier')!.transactions.push(tx);
+    if (!groupsMap.has(dateKey)) {
+      let title = '';
+      if (diffDays === 0) {
+        title = 'Today';
+      } else if (diffDays === 1) {
+        title = 'Yesterday';
+      } else if (diffDays === -1) {
+        title = 'Tomorrow';
+      } else {
+        const dateObj = new Date(year, monthIndex, day);
+        const formatOptions: Intl.DateTimeFormatOptions = {
+          day: 'numeric',
+          month: 'long',
+          ...(year !== refYear ? { year: 'numeric' } : {}),
+        };
+        title = new Intl.DateTimeFormat(locale, formatOptions).format(dateObj);
+      }
+
+      groupsMap.set(dateKey, {
+        id: dateKey,
+        title,
+        dateKey,
+        transactions: [],
+      });
     }
+
+    groupsMap.get(dateKey)!.transactions.push(tx);
   }
 
-  return Array.from(groupsMap.values()).filter((g) => g.transactions.length > 0);
+  return Array.from(groupsMap.values());
 }

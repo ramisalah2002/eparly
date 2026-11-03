@@ -229,6 +229,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 10,
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
