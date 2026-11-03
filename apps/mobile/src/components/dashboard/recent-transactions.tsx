@@ -1,34 +1,56 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
 import {
-  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import {
-  Briefcase,
+  ArrowUpRight,
+  BriefcaseBusiness,
+  CreditCard,
+  Inbox,
   Music2,
   Play,
   ShoppingCart,
 } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
+import { FONT_FAMILY } from '@/constants/typography';
 import { Spacing } from '@/constants/theme';
 import { DemoTransaction } from '@/features/dashboard/demo/dashboard-demo-data';
+import { groupTransactionsByDate } from '@/utils/formatters';
+
+import { MoneyAmount } from './money-amount';
 
 interface RecentTransactionsProps {
   transactions: DemoTransaction[];
   title?: string;
+  subtitle?: string;
   isBalanceHidden?: boolean;
+  locale?: string;
+  referenceDate?: Date | string;
   onSeeAllPress?: () => void;
 }
 
+/**
+ * Eparly Editorial Transaction Journal (Concept A).
+ * - Chronological grouping by real calendar day ("Today", "Yesterday", "29 October")
+ * - Refined 38px soft-tinted squircle category icons
+ * - Space Grotesk typography with baseline-aligned tabular amounts
+ * - Seamless "See all" minimalist text action with accessible >=44pt hitSlop
+ * - Zero redundant "Payment" or repeated date labels
+ */
 export function RecentTransactions({
-  transactions,
-  title = 'Recent transactions',
+  transactions = [],
+  title = 'Your activity',
+  subtitle = 'The latest money movements',
   isBalanceHidden = false,
+  locale = 'en-IE',
+  referenceDate,
   onSeeAllPress,
 }: RecentTransactionsProps) {
   const router = useRouter();
@@ -41,104 +63,164 @@ export function RecentTransactions({
     }
   };
 
-  const formatCurrency = (minor: number) => {
-    if (isBalanceHidden) return '••••••';
-    const isNegative = minor < 0;
-    const absMajor = Math.abs(minor) / 100;
-    const formatted = new Intl.NumberFormat('en-IE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 2,
-    }).format(absMajor);
-
-    return isNegative ? `-${formatted}` : `+${formatted}`;
-  };
-
   const getTransactionIcon = (iconName: string, isPositive: boolean) => {
-    const color = isPositive ? BRAND_COLORS.mutedMintGreen : BRAND_COLORS.deepLavender;
+    const iconColor = isPositive ? '#1E7558' : BRAND_COLORS.deepLavender;
+    const size = 17;
+    const strokeWidth = 2.1;
+
     switch (iconName) {
       case 'shopping':
-        return <ShoppingCart size={17} color={color} strokeWidth={2.2} />;
+        return <ShoppingCart size={size} color={iconColor} strokeWidth={strokeWidth} />;
       case 'music':
-        return <Music2 size={17} color={color} strokeWidth={2.2} />;
+        return <Music2 size={size} color={iconColor} strokeWidth={strokeWidth} />;
       case 'briefcase':
-        return <Briefcase size={17} color={color} strokeWidth={2.2} />;
+        return <BriefcaseBusiness size={size} color={iconColor} strokeWidth={strokeWidth} />;
       case 'play':
-        return <Play size={17} color={color} strokeWidth={2.2} />;
+        return <Play size={size} color={iconColor} strokeWidth={strokeWidth} />;
       default:
-        return <ShoppingCart size={17} color={color} strokeWidth={2.2} />;
+        return isPositive ? (
+          <BriefcaseBusiness size={size} color={iconColor} strokeWidth={strokeWidth} />
+        ) : (
+          <CreditCard size={size} color={iconColor} strokeWidth={strokeWidth} />
+        );
     }
   };
 
+  const getContainerBg = (iconName: string, isPositive: boolean, customBg?: string) => {
+    if (customBg) return customBg;
+    if (isPositive) return '#E8F6F1';
+    switch (iconName) {
+      case 'music':
+      case 'play':
+        return '#F3EFF8';
+      case 'shopping':
+        return '#F1EEF6';
+      default:
+        return '#F2EFF7';
+    }
+  };
+
+  // Group transactions by calendar day relative to the current reference date
+  const groupedTransactions = groupTransactionsByDate(transactions, {
+    referenceDate,
+    locale,
+  });
+
   return (
     <View style={styles.cardContainer}>
-      {/* Header */}
+      {/* 1. Section Header: Title, Subtitle, and Minimalist See All Action */}
       <View style={styles.headerRow}>
-        <View>
+        <View style={styles.titleColumn}>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>Latest activity</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
 
-        <TouchableOpacity
+        <AnimatedPressable
           onPress={handleSeeAll}
-          activeOpacity={0.7}
-          style={styles.seeAllButton}
+          scaleTarget={MOTION.scale.buttonPress}
+          haptic="selection"
+          style={styles.seeAllAction}
+          hitSlop={{ top: 12, bottom: 12, left: 14, right: 14 }}
           accessibilityLabel="See all transactions"
           accessibilityRole="button">
           <Text style={styles.seeAllText}>See all</Text>
-        </TouchableOpacity>
+          <ArrowUpRight size={14} color={BRAND_COLORS.deepLavender} strokeWidth={2.4} />
+        </AnimatedPressable>
       </View>
 
-      {/* Transactions List with Vector Icons */}
-      <View style={styles.listContainer}>
-        {transactions.map((tx, index) => {
-          const isPositive = tx.amountMinor > 0;
-          const isLast = index === transactions.length - 1;
-
-          return (
-            <Pressable
-              key={tx.id}
-              style={({ pressed }) => [
-                styles.transactionRow,
-                isLast && styles.noDivider,
-                pressed && styles.rowPressed,
-              ]}
-              accessibilityLabel={`${tx.merchant}, ${tx.category}, ${tx.dateLabel}, ${formatCurrency(tx.amountMinor)}`}>
-              {/* Rounded Vector Icon Container */}
-              <View
-                style={[
-                  styles.iconContainer,
-                  { backgroundColor: tx.iconBg },
-                ]}>
-                {getTransactionIcon(tx.iconName, isPositive)}
+      {/* 2. Transaction Groups or Empty State */}
+      {transactions.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconCircle}>
+            <Inbox size={26} color={BRAND_COLORS.deepLavender} strokeWidth={1.8} />
+          </View>
+          <Text style={styles.emptyTitle}>No activity recorded</Text>
+          <Text style={styles.emptyDescription}>
+            Your recent transactions will appear here as soon as payments or income are logged.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.journalContainer}>
+          {groupedTransactions.map((group, groupIndex) => (
+            <View key={group.id} style={styles.groupSection}>
+              {/* Group Date Header: Clean, understated natural-language heading */}
+              <View style={styles.dateHeaderRow}>
+                <Text style={styles.dateHeadingText}>{group.title}</Text>
               </View>
 
-              {/* Merchant & Category / Date */}
-              <View style={styles.detailsContainer}>
-                <Text style={styles.merchantName} numberOfLines={1}>
-                  {tx.merchant}
-                </Text>
-                <View style={styles.metaRow}>
-                  <Text style={styles.categoryBadgeText}>{tx.category}</Text>
-                  <Text style={styles.metaDot}>•</Text>
-                  <Text style={styles.dateText}>{tx.dateLabel}</Text>
-                </View>
-              </View>
+              {/* Group Transaction Rows */}
+              <View style={styles.groupRowsContainer}>
+                {group.transactions.map((tx, txIndex) => {
+                  const isPositive = tx.amountMinor > 0;
+                  const isLastInGroup = txIndex === group.transactions.length - 1;
+                  const globalIndex = groupIndex * 3 + txIndex;
 
-              {/* Amount */}
-              <View style={styles.amountContainer}>
-                <Text
-                  style={[
-                    styles.amountText,
-                    isPositive ? styles.positiveAmount : styles.negativeAmount,
-                  ]}>
-                  {formatCurrency(tx.amountMinor)}
-                </Text>
+                  const accessibleAmount = isBalanceHidden
+                    ? 'amount hidden'
+                    : `${isPositive ? 'plus' : 'minus'} ${(Math.abs(tx.amountMinor) / 100).toFixed(2)} euros`;
+
+                  return (
+                    <Animated.View
+                      key={tx.id}
+                      entering={FadeInUp.duration(360).delay(globalIndex * 35)}>
+                      <AnimatedPressable
+                        onPress={handleSeeAll}
+                        scaleTarget={0.985}
+                        activeOpacity={0.94}
+                        haptic="light"
+                        style={styles.transactionRow}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${tx.merchant}, ${tx.category}, ${group.title}, ${accessibleAmount}`}>
+                        {/* Left: 38px Soft-Tinted Squircle Icon Container */}
+                        <View
+                          style={[
+                            styles.iconContainer,
+                            {
+                              backgroundColor: getContainerBg(
+                                tx.iconName,
+                                isPositive,
+                                tx.iconBg
+                              ),
+                            },
+                          ]}>
+                          {getTransactionIcon(tx.iconName, isPositive)}
+                        </View>
+
+                        {/* Center: Merchant Name & Clean Category Context */}
+                        <View style={styles.detailsContainer}>
+                          <Text style={styles.merchantName} numberOfLines={1}>
+                            {tx.merchant}
+                          </Text>
+                          <Text style={styles.categoryText} numberOfLines={1}>
+                            {tx.category}
+                          </Text>
+                        </View>
+
+                        {/* Right: Tabular Amount with Baseline Alignment */}
+                        <View style={styles.amountContainer}>
+                          <MoneyAmount
+                            amountMinor={tx.amountMinor}
+                            currency={tx.currency || 'EUR'}
+                            locale={locale}
+                            isHidden={isBalanceHidden}
+                            size="row"
+                            showSign={isPositive}
+                            color={isPositive ? '#1E7558' : BRAND_COLORS.darkCharcoal}
+                            accessibilityLabelPrefix={`${tx.merchant} ${tx.category}`}
+                          />
+                        </View>
+                      </AnimatedPressable>
+
+                      {/* Hairline Row Divider (only between rows inside the same date group) */}
+                      {!isLastInGroup && <View style={styles.rowDivider} />}
+                    </Animated.View>
+                  );
+                })}
               </View>
-            </Pressable>
-          );
-        })}
-      </View>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -147,69 +229,99 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: BRAND_COLORS.pureWhite,
     borderRadius: 24,
-    padding: Spacing.four,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 18,
     borderWidth: 1,
-    borderColor: BRAND_COLORS.cardBorder,
+    borderColor: 'rgba(168, 155, 190, 0.20)',
     shadowColor: BRAND_COLORS.darkCharcoal,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
-    marginBottom: Spacing.four,
+    marginBottom: 14,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.two + 4,
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  titleColumn: {
+    flex: 1,
+    paddingRight: 10,
   },
   title: {
-    fontSize: 17,
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '400',
     color: BRAND_COLORS.secondaryText,
     marginTop: 2,
+    letterSpacing: -0.1,
   },
-  seeAllButton: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: BRAND_COLORS.veryLightLavender,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 155, 190, 0.22)',
+  seeAllAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
   seeAllText: {
-    fontSize: 11,
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 13,
     fontWeight: '600',
     color: BRAND_COLORS.deepLavender,
+    letterSpacing: -0.1,
   },
-  listContainer: {
-    gap: 2,
+  actionPressed: {
+    opacity: 0.65,
+    transform: [{ scale: 0.98 }],
+  },
+  journalContainer: {
+    marginTop: 6,
+  },
+  groupSection: {
+    marginTop: 6,
+  },
+  dateHeaderRow: {
+    paddingHorizontal: 2,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  dateHeadingText: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: BRAND_COLORS.secondaryText,
+    letterSpacing: -0.1,
+  },
+  groupRowsContainer: {
+    marginTop: 2,
   },
   transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 6,
-    borderRadius: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.03)',
-  },
-  noDivider: {
-    borderBottomWidth: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    minHeight: 54,
+    borderRadius: 12,
   },
   rowPressed: {
-    backgroundColor: BRAND_COLORS.warmOffWhite,
+    backgroundColor: 'rgba(36, 37, 53, 0.025)',
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -219,41 +331,56 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.two,
   },
   merchantName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-    marginBottom: 2,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  categoryBadgeText: {
-    fontSize: 11,
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 15,
     fontWeight: '500',
-    color: BRAND_COLORS.secondaryText,
+    color: BRAND_COLORS.darkCharcoal,
+    letterSpacing: -0.2,
   },
-  metaDot: {
-    fontSize: 10,
+  categoryText: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 12.5,
+    fontWeight: '400',
     color: BRAND_COLORS.secondaryText,
-  },
-  dateText: {
-    fontSize: 11,
-    color: BRAND_COLORS.secondaryText,
+    marginTop: 2,
   },
   amountContainer: {
     alignItems: 'flex-end',
+    justifyContent: 'center',
   },
-  amountText: {
-    fontSize: 14,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
+  rowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(36, 37, 53, 0.05)',
+    marginLeft: 54,
   },
-  positiveAmount: {
-    color: '#2E7D32',
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 16,
   },
-  negativeAmount: {
+  emptyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(240, 236, 245, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  emptyTitle: {
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 15,
+    fontWeight: '600',
     color: BRAND_COLORS.darkCharcoal,
+    marginBottom: 4,
+  },
+  emptyDescription: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 13,
+    color: BRAND_COLORS.secondaryText,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 240,
   },
 });

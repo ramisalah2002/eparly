@@ -16,21 +16,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PastelBackground } from './pastel-background';
 import { BRAND_COLORS } from '@/constants/colors';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth } from '@/constants/theme';
 
 interface DashboardSkeletonProps {
   testID?: string;
 }
 
+/**
+ * Eparly Dashboard Production Loading Skeleton.
+ * Accurately mirrors the loaded dashboard structure:
+ * 1. Fixed Monograph Header (Contextual Date, Greeting & 36px Actions)
+ * 2. Editorial Financial Overview Card (Hero Balance & Cash Flow Horizon)
+ * 3. Signature 2x2 Quick Actions Grid with Pastel Tint Surfaces
+ * 4. Spending Activity Chart (Hero Masthead & 6 Pillar Bars)
+ * 5. Where Your Money Goes (11px Segmented Bar & Streamlined Rows)
+ * 6. Your Activity Journal (Squircle Icons & Tabular Rows)
+ */
 export function DashboardSkeleton({ testID = 'dashboard-skeleton' }: DashboardSkeletonProps) {
   const insets = useSafeAreaInsets();
-  const shimmerOpacity = useSharedValue(0.35);
+  const shimmerOpacity = useSharedValue(0.28);
 
   useEffect(() => {
+    // Smooth sinusoidal breathing pulse (900ms cycle)
     shimmerOpacity.value = withRepeat(
       withSequence(
-        withTiming(0.85, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.35, { duration: 800, easing: Easing.inOut(Easing.ease) })
+        withTiming(0.72, { duration: 900, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0.28, { duration: 900, easing: Easing.inOut(Easing.quad) })
       ),
       -1,
       true
@@ -41,173 +52,215 @@ export function DashboardSkeleton({ testID = 'dashboard-skeleton' }: DashboardSk
     opacity: shimmerOpacity.value,
   }));
 
+  const contentPaddingTop = insets.top + 84 + 14;
   const contentPaddingBottom = Math.max(insets.bottom, 20) + 96;
 
   return (
     <View style={styles.screenContainer} testID={testID} accessibilityLabel="Loading dashboard...">
-      {/* Full-screen pastel background */}
+      {/* Full-screen warm off-white pastel background */}
       <PastelBackground style={StyleSheet.absoluteFill} pointerEvents="none" />
 
-      {/* FIXED STICKY HEADER SKELETON */}
+      {/* 1. FIXED STICKY MONOGRAPH HEADER SKELETON */}
       <View style={[styles.fixedHeaderContainer, { paddingTop: insets.top }]}>
         <View style={styles.headerSurface}>
           <View style={styles.headerContent}>
-            {/* Left: Greeting Bar */}
+            {/* Left: Monograph Context Date & Greeting */}
             <View style={styles.headerGreetingCol}>
-              <Animated.View style={[styles.shimmerBase, styles.greetingBar, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.subGreetingBar, animatedShimmerStyle]} />
+              <Animated.View style={[styles.shimmerBase, styles.headerDateBar, animatedShimmerStyle]} />
+              <Animated.View style={[styles.shimmerBase, styles.headerGreetingBar, animatedShimmerStyle]} />
             </View>
 
-            {/* Right: Notification Bell & User Avatar Circles */}
+            {/* Right: 36px Notification Bell & User Avatar Monogram */}
             <View style={styles.headerActionsGroup}>
-              <Animated.View style={[styles.shimmerBase, styles.headerCircleBtn, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.headerCircleBtn, animatedShimmerStyle]} />
+              <Animated.View style={[styles.shimmerBase, styles.headerActionCircle, animatedShimmerStyle]} />
+              <Animated.View style={[styles.shimmerBase, styles.headerActionCircle, animatedShimmerStyle]} />
             </View>
           </View>
         </View>
-        <View style={styles.headerBottomBorder} />
       </View>
 
-      {/* SCROLLING SKELETON CONTENT */}
+      {/* 2. SCROLLING SKELETON CONTENT */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.contentContainer,
           {
-            paddingTop: Spacing.three,
+            paddingTop: contentPaddingTop,
             paddingBottom: contentPaddingBottom,
           },
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={false}>
         <View style={styles.innerContent}>
-          {/* 1. FINANCIAL OVERVIEW CARD SKELETON */}
-          <View style={styles.cardContainer}>
-            {/* Top row: Label & Eye icon */}
-            <View style={styles.cardTopRow}>
-              <Animated.View style={[styles.shimmerBase, styles.balanceLabelBar, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.circleEyeBtn, animatedShimmerStyle]} />
+          {/* SECTION 1: FINANCIAL OVERVIEW CARD */}
+          <View style={[styles.cardContainer, styles.overviewCardContainer]}>
+            {/* Top row: Eyebrow badge & Eye toggle button */}
+            <View style={styles.cardHeaderRow}>
+              <Animated.View style={[styles.shimmerBase, styles.overviewEyebrowBar, animatedShimmerStyle]} />
+              <Animated.View style={[styles.shimmerBase, styles.overviewEyeBtn, animatedShimmerStyle]} />
             </View>
 
-            {/* Main balance amount */}
-            <Animated.View style={[styles.shimmerBase, styles.mainBalanceAmountBar, animatedShimmerStyle]} />
+            {/* Hero balance amount */}
+            <Animated.View style={[styles.shimmerBase, styles.heroBalanceBar, animatedShimmerStyle]} />
 
-            {/* Accounts badge */}
-            <Animated.View style={[styles.shimmerBase, styles.accountsBadgeBar, animatedShimmerStyle]} />
+            {/* Accounts scope label */}
+            <Animated.View style={[styles.shimmerBase, styles.accountsScopeBar, animatedShimmerStyle]} />
 
-            {/* Embedded Income & Expenses Mini Cards (Mint & Lavender matching reference) */}
-            <View style={styles.miniCardsRow}>
-              {/* Income Mini Card */}
-              <View style={[styles.miniCard, styles.incomeMiniCard]}>
-                <View style={styles.miniCardTopRow}>
-                  <Animated.View style={[styles.shimmerBase, styles.miniCardAmountBar, animatedShimmerStyle]} />
-                  <Animated.View style={[styles.shimmerBase, styles.miniCardPlusCircle, animatedShimmerStyle]} />
-                </View>
-                <Animated.View style={[styles.shimmerBase, styles.miniCardLabelBar, animatedShimmerStyle]} />
+            {/* Subtle Horizon Separator */}
+            <View style={styles.horizonSeparator} />
+
+            {/* Integrated Cash Flow Horizon (Income & Expenses Columns) */}
+            <View style={styles.cashFlowHorizonRow}>
+              <View style={styles.cashFlowCol}>
+                <Animated.View style={[styles.shimmerBase, styles.cashFlowLabelBar, animatedShimmerStyle]} />
+                <Animated.View style={[styles.shimmerBase, styles.cashFlowAmountBar, animatedShimmerStyle]} />
               </View>
-
-              {/* Expense Mini Card */}
-              <View style={[styles.miniCard, styles.expenseMiniCard]}>
-                <View style={styles.miniCardTopRow}>
-                  <Animated.View style={[styles.shimmerBase, styles.miniCardAmountBar, animatedShimmerStyle]} />
-                  <Animated.View style={[styles.shimmerBase, styles.miniCardPlusCircle, animatedShimmerStyle]} />
-                </View>
-                <Animated.View style={[styles.shimmerBase, styles.miniCardLabelBar, animatedShimmerStyle]} />
+              <View style={styles.verticalHorizonDivider} />
+              <View style={styles.cashFlowCol}>
+                <Animated.View style={[styles.shimmerBase, styles.cashFlowLabelBar, animatedShimmerStyle]} />
+                <Animated.View style={[styles.shimmerBase, styles.cashFlowAmountBar, animatedShimmerStyle]} />
               </View>
             </View>
           </View>
 
-          {/* 2. SPENDING OVERVIEW SKELETON */}
-          <View style={styles.cardContainer}>
-            {/* Header row: Title & "See more" button */}
-            <View style={styles.cardHeaderRow}>
-              <Animated.View style={[styles.shimmerBase, styles.chartTitleBar, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.badgePill, animatedShimmerStyle]} />
+          {/* SECTION 2: 2x2 QUICK ACTIONS GRID */}
+          <View style={styles.quickActionsContainer}>
+            {/* Section Heading */}
+            <View style={styles.quickActionsHeaderRow}>
+              <Animated.View style={[styles.shimmerBase, styles.quickActionsHeadingBar, animatedShimmerStyle]} />
             </View>
 
-            {/* Selected month tag */}
-            <Animated.View style={[styles.shimmerBase, styles.selectedMonthTag, animatedShimmerStyle]} />
+            {/* 2x2 Grid of Cards */}
+            <View style={styles.quickActionsGrid}>
+              {[
+                { bg: '#F1EEF6' },
+                { bg: '#F3EFF8' },
+                { bg: '#FAF3EB' },
+                { bg: '#E8F6F1' },
+              ].map((card, idx) => (
+                <View key={idx} style={[styles.quickActionCard, { backgroundColor: card.bg }]}>
+                  <View style={styles.quickActionTop}>
+                    <Animated.View style={[styles.shimmerBase, styles.quickActionPill, animatedShimmerStyle]} />
+                    <Animated.View style={[styles.shimmerBase, styles.quickActionTitleBar, animatedShimmerStyle]} />
+                  </View>
+                  <View style={styles.quickActionBottom}>
+                    <Animated.View style={[styles.shimmerBase, styles.quickActionIllustration, animatedShimmerStyle]} />
+                    <Animated.View style={[styles.shimmerBase, styles.quickActionArrowBtn, animatedShimmerStyle]} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
 
-            {/* 6 Chart Bars */}
+          {/* SECTION 3: SPENDING ACTIVITY CHART */}
+          <View style={styles.cardContainer}>
+            {/* Header row: Title & Period selector */}
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.titleSubCol}>
+                <Animated.View style={[styles.shimmerBase, styles.sectionTitleBar, animatedShimmerStyle]} />
+                <Animated.View style={[styles.shimmerBase, styles.sectionSubBar, animatedShimmerStyle]} />
+              </View>
+              <Animated.View style={[styles.shimmerBase, styles.periodBadgePill, animatedShimmerStyle]} />
+            </View>
+
+            {/* Hero metric masthead: Spent amount & delta badge */}
+            <View style={styles.chartMastheadRow}>
+              <View style={styles.chartMastheadCol}>
+                <Animated.View style={[styles.shimmerBase, styles.chartSpentCaption, animatedShimmerStyle]} />
+                <Animated.View style={[styles.shimmerBase, styles.chartSpentAmount, animatedShimmerStyle]} />
+              </View>
+              <Animated.View style={[styles.shimmerBase, styles.chartDeltaBadge, animatedShimmerStyle]} />
+            </View>
+
+            {/* 6 Proportional Chart Bars */}
             <View style={styles.chartBarsContainer}>
-              {[50, 78, 42, 92, 65, 84].map((barHeight, idx) => (
-                <View key={idx} style={styles.barCol}>
-                  <View style={styles.barWrapper}>
+              {[45, 68, 38, 92, 58, 76].map((barHeight, idx) => (
+                <View key={idx} style={styles.chartBarCol}>
+                  <View style={styles.chartBarTrack}>
                     <Animated.View
                       style={[
                         styles.shimmerBase,
-                        styles.chartBar,
+                        styles.chartBarFill,
                         { height: barHeight },
                         animatedShimmerStyle,
                       ]}
                     />
                   </View>
-                  <Animated.View style={[styles.shimmerBase, styles.barMonthLabel, animatedShimmerStyle]} />
+                  <Animated.View style={[styles.shimmerBase, styles.chartMonthLabel, animatedShimmerStyle]} />
                 </View>
               ))}
             </View>
           </View>
 
-          {/* 3. CATEGORY BREAKDOWN SKELETON */}
+          {/* SECTION 4: WHERE YOUR MONEY GOES (CATEGORY BREAKDOWN) */}
           <View style={styles.cardContainer}>
             {/* Header row */}
             <View style={styles.cardHeaderRow}>
-              <View style={styles.titleSubGroup}>
+              <View style={styles.titleSubCol}>
                 <Animated.View style={[styles.shimmerBase, styles.categoryTitleBar, animatedShimmerStyle]} />
-                <Animated.View style={[styles.shimmerBase, styles.categorySubtitleBar, animatedShimmerStyle]} />
+                <Animated.View style={[styles.shimmerBase, styles.sectionSubBar, animatedShimmerStyle]} />
               </View>
-              <Animated.View style={[styles.shimmerBase, styles.categoryBadge, animatedShimmerStyle]} />
+              <Animated.View style={[styles.shimmerBase, styles.categoryTotalPill, animatedShimmerStyle]} />
             </View>
 
-            {/* Segmented bar */}
+            {/* 11px Segmented Distribution Bar */}
             <View style={styles.segmentedBarTrack}>
-              <Animated.View style={[styles.shimmerBase, styles.segmentPiece, { flex: 3 }, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.segmentPiece, { flex: 2.5 }, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.segmentPiece, { flex: 2.2 }, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.segmentPiece, { flex: 1.5 }, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.segmentPiece, { flex: 1 }, animatedShimmerStyle]} />
+              <View style={[styles.segmentPiece, { flex: 3.1, backgroundColor: 'rgba(128, 103, 161, 0.28)' }]} />
+              <View style={[styles.segmentPiece, { flex: 2.4, backgroundColor: 'rgba(171, 154, 192, 0.28)' }]} />
+              <View style={[styles.segmentPiece, { flex: 2.2, backgroundColor: 'rgba(216, 195, 168, 0.35)' }]} />
+              <View style={[styles.segmentPiece, { flex: 1.4, backgroundColor: 'rgba(89, 185, 155, 0.30)' }]} />
+              <View style={[styles.segmentPiece, { flex: 0.9, backgroundColor: 'rgba(232, 154, 145, 0.30)' }]} />
             </View>
 
-            {/* Category rows */}
+            {/* Streamlined Category Rows */}
             <View style={styles.categoryRowsList}>
-              {[1, 2, 3, 4].map((item) => (
-                <View key={item} style={styles.categoryRowItem}>
-                  <View style={styles.categoryRowLeft}>
-                    <Animated.View style={[styles.shimmerBase, styles.categoryCircleIcon, animatedShimmerStyle]} />
-                    <View style={styles.categoryRowTextCol}>
+              {[1, 2, 3, 4, 5].map((item, idx) => (
+                <View key={item}>
+                  <View style={styles.categoryRowItem}>
+                    <View style={styles.categoryRowLeft}>
+                      <Animated.View style={[styles.shimmerBase, styles.categoryIconCircle, animatedShimmerStyle]} />
                       <Animated.View style={[styles.shimmerBase, styles.categoryRowName, animatedShimmerStyle]} />
-                      <Animated.View style={[styles.shimmerBase, styles.categoryRowTrack, animatedShimmerStyle]} />
+                    </View>
+                    <View style={styles.categoryRowRight}>
+                      <Animated.View style={[styles.shimmerBase, styles.categoryRowAmount, animatedShimmerStyle]} />
+                      <Animated.View style={[styles.shimmerBase, styles.categoryRowPercent, animatedShimmerStyle]} />
                     </View>
                   </View>
-                  <View style={styles.categoryRowRight}>
-                    <Animated.View style={[styles.shimmerBase, styles.categoryRowAmount, animatedShimmerStyle]} />
-                    <Animated.View style={[styles.shimmerBase, styles.categoryRowPercent, animatedShimmerStyle]} />
-                  </View>
+                  {idx < 4 && <View style={styles.rowDivider} />}
                 </View>
               ))}
             </View>
           </View>
 
-          {/* 4. RECENT TRANSACTIONS SKELETON */}
+          {/* SECTION 5: YOUR ACTIVITY (RECENT TRANSACTIONS) */}
           <View style={styles.cardContainer}>
             {/* Header row */}
             <View style={styles.cardHeaderRow}>
-              <Animated.View style={[styles.shimmerBase, styles.transactionsTitleBar, animatedShimmerStyle]} />
-              <Animated.View style={[styles.shimmerBase, styles.seeAllPill, animatedShimmerStyle]} />
+              <View style={styles.titleSubCol}>
+                <Animated.View style={[styles.shimmerBase, styles.transactionsTitleBar, animatedShimmerStyle]} />
+                <Animated.View style={[styles.shimmerBase, styles.transactionsSubBar, animatedShimmerStyle]} />
+              </View>
+              <Animated.View style={[styles.shimmerBase, styles.seeAllActionPill, animatedShimmerStyle]} />
             </View>
 
-            {/* Transaction items */}
+            {/* Group date heading */}
+            <Animated.View style={[styles.shimmerBase, styles.txDateHeadingBar, animatedShimmerStyle]} />
+
+            {/* Transaction Items */}
             <View style={styles.transactionItemsList}>
-              {[1, 2, 3].map((item) => (
-                <View key={item} style={styles.transactionRowItem}>
-                  <View style={styles.transactionRowLeft}>
-                    <Animated.View style={[styles.shimmerBase, styles.txIconBox, animatedShimmerStyle]} />
-                    <View style={styles.txTextCol}>
-                      <Animated.View style={[styles.shimmerBase, styles.txMerchantBar, animatedShimmerStyle]} />
-                      <Animated.View style={[styles.shimmerBase, styles.txCategoryBar, animatedShimmerStyle]} />
+              {[1, 2, 3].map((item, idx) => (
+                <View key={item}>
+                  <View style={styles.transactionRowItem}>
+                    <View style={styles.transactionRowLeft}>
+                      <Animated.View style={[styles.shimmerBase, styles.txIconSquircle, animatedShimmerStyle]} />
+                      <View style={styles.txTextCol}>
+                        <Animated.View style={[styles.shimmerBase, styles.txMerchantBar, animatedShimmerStyle]} />
+                        <Animated.View style={[styles.shimmerBase, styles.txCategoryBar, animatedShimmerStyle]} />
+                      </View>
                     </View>
+                    <Animated.View style={[styles.shimmerBase, styles.txAmountBar, animatedShimmerStyle]} />
                   </View>
-                  <Animated.View style={[styles.shimmerBase, styles.txAmountBar, animatedShimmerStyle]} />
+                  {idx < 2 && <View style={styles.txRowDivider} />}
                 </View>
               ))}
             </View>
@@ -224,20 +277,31 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND_COLORS.warmOffWhite,
   },
   shimmerBase: {
-    backgroundColor: 'rgba(168, 155, 190, 0.22)',
+    backgroundColor: 'rgba(168, 155, 190, 0.18)',
     borderRadius: 8,
   },
   fixedHeaderContainer: {
-    width: '100%',
-    zIndex: 100,
-    elevation: 4,
-    backgroundColor: 'rgba(230, 247, 241, 0.95)',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 99,
+    overflow: 'hidden',
+    backgroundColor: '#FAF9F6',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(36, 37, 53, 0.05)',
+    shadowColor: BRAND_COLORS.darkCharcoal,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
   headerSurface: {
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
   headerContent: {
     width: '100%',
@@ -247,39 +311,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerGreetingCol: {
-    gap: 6,
+    gap: 4,
   },
-  greetingBar: {
-    width: 150,
-    height: 20,
-    borderRadius: 6,
-  },
-  subGreetingBar: {
-    width: 100,
+  headerDateBar: {
+    width: 105,
     height: 12,
     borderRadius: 4,
   },
+  headerGreetingBar: {
+    width: 175,
+    height: 22,
+    borderRadius: 6,
+  },
   headerActionsGroup: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     alignItems: 'center',
   },
-  headerCircleBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-  },
-  headerBottomBorder: {
-    height: 1,
-    backgroundColor: 'rgba(168, 155, 190, 0.18)',
-    width: '100%',
+  headerActionCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
     alignItems: 'center',
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: 16,
   },
   innerContent: {
     width: '100%',
@@ -288,200 +347,267 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: BRAND_COLORS.pureWhite,
     borderRadius: 24,
-    padding: Spacing.four,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 18,
     borderWidth: 1,
-    borderColor: BRAND_COLORS.cardBorder,
+    borderColor: 'rgba(168, 155, 190, 0.20)',
     shadowColor: BRAND_COLORS.darkCharcoal,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
-    marginBottom: Spacing.three,
+    marginBottom: 14,
   },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  balanceLabelBar: {
-    width: 95,
-    height: 14,
-    borderRadius: 4,
-  },
-  circleEyeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  mainBalanceAmountBar: {
-    width: 210,
-    height: 38,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  accountsBadgeBar: {
-    width: 125,
-    height: 20,
-    borderRadius: 10,
-    marginBottom: 16,
-  },
-  miniCardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  miniCard: {
-    flex: 1,
-    borderRadius: 20,
-    padding: 14,
-    minHeight: 88,
-    justifyContent: 'space-between',
-  },
-  incomeMiniCard: {
-    backgroundColor: 'rgba(226, 247, 236, 0.75)',
-  },
-  expenseMiniCard: {
-    backgroundColor: 'rgba(228, 220, 248, 0.75)',
-  },
-  miniCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  miniCardAmountBar: {
-    width: '68%',
-    height: 18,
-    borderRadius: 5,
-  },
-  miniCardPlusCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  miniCardLabelBar: {
-    width: '45%',
-    height: 12,
-    borderRadius: 4,
-    marginTop: 10,
+  overviewCardContainer: {
+    backgroundColor: '#FAF9FB',
   },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
   },
-  chartTitleBar: {
-    width: 140,
+  titleSubCol: {
+    gap: 4,
+  },
+  overviewEyebrowBar: {
+    width: 95,
     height: 18,
+    borderRadius: 8,
+  },
+  overviewEyeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  heroBalanceBar: {
+    width: 210,
+    height: 36,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  accountsScopeBar: {
+    width: 120,
+    height: 14,
+    borderRadius: 4,
+    marginBottom: 14,
+  },
+  horizonSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(168, 155, 190, 0.14)',
+    marginVertical: 12,
+    width: '100%',
+  },
+  cashFlowHorizonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 2,
+  },
+  cashFlowCol: {
+    flex: 1,
+    gap: 6,
+  },
+  cashFlowLabelBar: {
+    width: 75,
+    height: 12,
+    borderRadius: 4,
+  },
+  cashFlowAmountBar: {
+    width: 95,
+    height: 18,
+    borderRadius: 5,
+  },
+  verticalHorizonDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(168, 155, 190, 0.14)',
+    marginHorizontal: 16,
+  },
+  quickActionsContainer: {
+    width: '100%',
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  quickActionsHeaderRow: {
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  quickActionsHeadingBar: {
+    width: 125,
+    height: 20,
+    borderRadius: 5,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickActionCard: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    minHeight: 162,
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
+    justifyContent: 'space-between',
+  },
+  quickActionTop: {
+    alignItems: 'flex-start',
+  },
+  quickActionPill: {
+    width: 52,
+    height: 18,
+    borderRadius: 9,
+    marginBottom: 8,
+  },
+  quickActionTitleBar: {
+    width: '80%',
+    height: 18,
+    borderRadius: 5,
+  },
+  quickActionBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 10,
+  },
+  quickActionIllustration: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  },
+  quickActionArrowBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+  },
+  sectionTitleBar: {
+    width: 140,
+    height: 20,
+    borderRadius: 5,
+  },
+  sectionSubBar: {
+    width: 125,
+    height: 12,
+    borderRadius: 4,
+  },
+  periodBadgePill: {
+    width: 95,
+    height: 24,
+    borderRadius: 12,
+  },
+  chartMastheadRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 12,
+    marginBottom: 14,
+  },
+  chartMastheadCol: {
+    gap: 5,
+  },
+  chartSpentCaption: {
+    width: 95,
+    height: 12,
+    borderRadius: 4,
+  },
+  chartSpentAmount: {
+    width: 110,
+    height: 26,
     borderRadius: 6,
   },
-  badgePill: {
+  chartDeltaBadge: {
     width: 78,
-    height: 26,
-    borderRadius: 12,
-  },
-  selectedMonthTag: {
-    width: 135,
     height: 28,
-    borderRadius: 12,
-    marginVertical: 6,
+    borderRadius: 14,
   },
   chartBarsContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 140,
-    paddingTop: 12,
+    height: 130,
+    paddingTop: 8,
   },
-  barCol: {
+  chartBarCol: {
     flex: 1,
     alignItems: 'center',
     height: '100%',
     justifyContent: 'flex-end',
   },
-  barWrapper: {
-    width: '100%',
-    alignItems: 'center',
+  chartBarTrack: {
+    width: 26,
+    height: 105,
+    backgroundColor: '#F5F2F8',
+    borderRadius: 13,
     justifyContent: 'flex-end',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
-  chartBar: {
-    width: 38,
-    borderRadius: 6,
+  chartBarFill: {
+    width: '100%',
+    borderRadius: 13,
   },
-  barMonthLabel: {
-    width: 24,
+  chartMonthLabel: {
+    width: 22,
     height: 10,
     borderRadius: 3,
-    marginTop: 8,
-  },
-  titleSubGroup: {
-    gap: 4,
+    marginTop: 6,
   },
   categoryTitleBar: {
     width: 160,
-    height: 18,
-    borderRadius: 6,
+    height: 20,
+    borderRadius: 5,
   },
-  categorySubtitleBar: {
-    width: 100,
-    height: 12,
-    borderRadius: 4,
-  },
-  categoryBadge: {
-    width: 76,
+  categoryTotalPill: {
+    width: 72,
     height: 22,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   segmentedBarTrack: {
     flexDirection: 'row',
     width: '100%',
-    height: 16,
-    borderRadius: 8,
+    height: 11,
+    borderRadius: 5.5,
     overflow: 'hidden',
-    backgroundColor: BRAND_COLORS.warmOffWhite,
-    gap: 2.5,
+    backgroundColor: 'rgba(168, 155, 190, 0.14)',
+    gap: 2,
     marginVertical: 14,
   },
   segmentPiece: {
     height: '100%',
-    borderRadius: 2,
   },
   categoryRowsList: {
-    gap: 12,
+    gap: 4,
   },
   categoryRowItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 7,
   },
   categoryRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    gap: 10,
   },
-  categoryCircleIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginRight: 12,
-  },
-  categoryRowTextCol: {
-    flex: 1,
-    gap: 6,
+  categoryIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   categoryRowName: {
     width: 90,
     height: 14,
     borderRadius: 4,
   },
-  categoryRowTrack: {
-    width: '85%',
-    height: 8,
-    borderRadius: 4,
-  },
   categoryRowRight: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 3,
   },
   categoryRowAmount: {
     width: 55,
@@ -490,55 +616,77 @@ const styles = StyleSheet.create({
   },
   categoryRowPercent: {
     width: 32,
-    height: 16,
-    borderRadius: 8,
+    height: 11,
+    borderRadius: 3,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(36, 37, 53, 0.04)',
+    marginLeft: 42,
   },
   transactionsTitleBar: {
-    width: 145,
-    height: 18,
-    borderRadius: 6,
+    width: 110,
+    height: 20,
+    borderRadius: 5,
   },
-  seeAllPill: {
-    width: 62,
-    height: 24,
-    borderRadius: 12,
+  transactionsSubBar: {
+    width: 145,
+    height: 12,
+    borderRadius: 4,
+  },
+  seeAllActionPill: {
+    width: 50,
+    height: 16,
+    borderRadius: 4,
+  },
+  txDateHeadingBar: {
+    width: 60,
+    height: 12,
+    borderRadius: 4,
+    marginTop: 10,
+    marginBottom: 6,
   },
   transactionItemsList: {
-    gap: 12,
+    gap: 4,
   },
   transactionRowItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 7,
   },
   transactionRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    gap: 12,
   },
-  txIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    marginRight: 12,
+  txIconSquircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
   },
   txTextCol: {
-    gap: 5,
+    gap: 4,
   },
   txMerchantBar: {
-    width: 110,
+    width: 100,
     height: 14,
     borderRadius: 4,
   },
   txCategoryBar: {
-    width: 75,
+    width: 65,
     height: 11,
     borderRadius: 3,
   },
   txAmountBar: {
-    width: 58,
+    width: 55,
     height: 15,
     borderRadius: 4,
+  },
+  txRowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(36, 37, 53, 0.05)',
+    marginLeft: 50,
   },
 });

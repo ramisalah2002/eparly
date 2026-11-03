@@ -1,0 +1,12 @@
+interface:
+  display_name: Improve React Native Animations
+  short_description: Audit and plan native motion improvements
+  default_prompt: Use $improve-react-native-animations to audit motion across this
+    Expo or React Native project.
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

@@ -4,10 +4,13 @@ import assert from 'node:assert/strict';
 import {
   formatCurrencyMinor,
   formatDateDisplay,
+  formatHeaderContextDate,
+  formatNaturalCapitalization,
   getCurrentMonthDateRange,
   getTimeBasedGreeting,
   getUserFirstName,
   getAvatarInitials,
+  sanitizeInitials,
 } from '../formatters.ts';
 
 describe('Financial & Dashboard Formatters', () => {
@@ -93,5 +96,27 @@ describe('Financial & Dashboard Formatters', () => {
     assert.strictEqual(getTimeBasedGreeting(morning), 'Bonjour');
     assert.strictEqual(getTimeBasedGreeting(afternoon), 'Bon après-midi');
     assert.strictEqual(getTimeBasedGreeting(evening), 'Bonsoir');
+  });
+
+  test('formats natural capitalization correctly', () => {
+    assert.strictEqual(formatNaturalCapitalization('rami'), 'Rami');
+    assert.strictEqual(formatNaturalCapitalization('RAMI'), 'Rami');
+    assert.strictEqual(formatNaturalCapitalization('jean-luc'), 'Jean-Luc');
+    assert.strictEqual(formatNaturalCapitalization(''), '');
+    assert.strictEqual(formatNaturalCapitalization(null), '');
+  });
+
+  test('formats header contextual date', () => {
+    const fixedDate = new Date(2026, 10, 1); // 1 Nov 2026
+    const label = formatHeaderContextDate(fixedDate);
+    assert.ok(label.includes('1'));
+    assert.ok(label.includes('NOV'));
+  });
+
+  test('sanitizes avatar initials and strips emoji', () => {
+    assert.strictEqual(sanitizeInitials('YE'), 'YE');
+    assert.strictEqual(sanitizeInitials('🚀YE'), 'YE');
+    assert.strictEqual(sanitizeInitials(''), 'EP');
+    assert.strictEqual(sanitizeInitials(null), 'EP');
   });
 });

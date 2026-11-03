@@ -33,6 +33,7 @@ import {
 import { ImportCsvModal } from '@/components/transactions/import-csv-modal';
 import { getCategoryTheme } from '@/constants/category-theme';
 import { BRAND_COLORS } from '@/constants/colors';
+import { FONT_FAMILY } from '@/constants/typography';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { fetchRecentTransactions, TransactionItem } from '@/services/dashboard-api';
 import { formatCurrencyMinor, formatDateDisplay } from '@/utils/formatters';
@@ -905,12 +906,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerTitle: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 26,
     fontWeight: '800',
     color: BRAND_COLORS.darkCharcoal,
     letterSpacing: -0.4,
   },
   headerSubtitle: {
+    fontFamily: FONT_FAMILY.medium,
     fontSize: 12.5,
     color: BRAND_COLORS.secondaryText,
     marginTop: 3,

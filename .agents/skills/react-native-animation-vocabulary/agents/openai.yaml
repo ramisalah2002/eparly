@@ -1,0 +1,12 @@
+interface:
+  display_name: React Native Animation Vocabulary
+  short_description: Name native motion and gesture effects
+  default_prompt: Use $react-native-animation-vocabulary to identify the exact term
+    for this mobile interaction.
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

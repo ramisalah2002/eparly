@@ -4,6 +4,7 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BRAND_COLORS } from '@/constants/colors';
+import { FONT_FAMILY } from '@/constants/typography';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { resetOnboarding } from '@/services/onboarding-storage';
@@ -136,11 +137,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
   },
   title: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 26,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
   },
   subtitle: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     color: BRAND_COLORS.secondaryText,
     marginTop: 2,
@@ -171,17 +174,20 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
   },
   avatarText: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 24,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
   },
   userName: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 18,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
     marginBottom: 4,
   },
   userEmail: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     color: BRAND_COLORS.secondaryText,
     marginBottom: Spacing.three,
@@ -206,6 +212,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   statusText: {
+    fontFamily: FONT_FAMILY.semiBold,
     fontSize: 11,
     fontWeight: '600',
     color: BRAND_COLORS.darkCharcoal,

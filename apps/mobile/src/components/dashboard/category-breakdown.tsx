@@ -1,10 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInUp,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   Car,
   Coffee,
@@ -13,9 +22,15 @@ import {
   ShoppingBag,
 } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
-import { Spacing } from '@/constants/theme';
+import { MOTION } from '@/constants/motion';
+import { FONT_FAMILY } from '@/constants/typography';
 import { DemoCategoryItem } from '@/features/dashboard/demo/dashboard-demo-data';
+import { computeCategoryShare } from '@/utils/formatters';
+import { triggerHaptic } from '@/utils/haptics';
+
+import { MoneyAmount } from './money-amount';
 
 interface CategoryBreakdownProps {
   title?: string;
@@ -25,8 +40,28 @@ interface CategoryBreakdownProps {
   isBalanceHidden?: boolean;
 }
 
+/**
+ * Brand color palette mapping for Eparly Spending Mix categories
+ */
+const CATEGORY_COLORS: Record<string, string> = {
+  'cat-shopping': '#8067A1', // Deep Lavender
+  'cat-food': '#AB9AC0', // Muted Lilac
+  'cat-bills': '#D8C3A8', // Warm Beige
+  'cat-transport': '#59B99B', // Muted Mint
+  'cat-other': '#E89A91', // Soft Coral
+};
+
+/**
+ * Eparly Editorial Spending Breakdown Component (Direction A).
+ * - Continuous canvas with clear typographic hierarchy
+ * - Total expenses context is permanently preserved in the summary
+ * - 11px segmented distribution bar with synchronized selection and touch feedback
+ * - Simplified category rows with 3px left vertical color-key indicator
+ * - Zero repeated figures and zero redundant mini-progress bars
+ */
 export function CategoryBreakdown({
   title = 'Where your money goes',
+  subtitle = 'October spending',
   totalExpensesMinor,
   categories,
   isBalanceHidden = false,
@@ -40,145 +75,151 @@ export function CategoryBreakdown({
     setSelectedCategoryId((prev) => (prev === id ? null : id));
   };
 
-  const formatCurrency = (minor: number) => {
-    if (isBalanceHidden) return '••••••';
-    const major = minor / 100;
-    return new Intl.NumberFormat('en-IE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(major);
+  const getCategoryColor = (cat: DemoCategoryItem): string => {
+    return CATEGORY_COLORS[cat.id] || cat.color || BRAND_COLORS.deepLavender;
   };
 
   const getCategoryIcon = (id: string, color: string) => {
+    const size = 16;
+    const strokeWidth = 2.2;
     switch (id) {
       case 'cat-shopping':
-        return <ShoppingBag size={19} color={color} strokeWidth={2.2} />;
+        return <ShoppingBag size={size} color={color} strokeWidth={strokeWidth} />;
       case 'cat-food':
-        return <Coffee size={19} color={color} strokeWidth={2.2} />;
+        return <Coffee size={size} color={color} strokeWidth={strokeWidth} />;
       case 'cat-bills':
-        return <Receipt size={19} color={color} strokeWidth={2.2} />;
+        return <Receipt size={size} color={color} strokeWidth={strokeWidth} />;
       case 'cat-transport':
-        return <Car size={19} color={color} strokeWidth={2.2} />;
+        return <Car size={size} color={color} strokeWidth={strokeWidth} />;
       default:
-        return <Shapes size={19} color={color} strokeWidth={2.2} />;
+        return <Shapes size={size} color={color} strokeWidth={strokeWidth} />;
     }
   };
 
+  // Pre-calculate shares for all categories
+  const effectiveTotalMinor = totalExpensesMinor > 0 ? totalExpensesMinor : 1;
+
   return (
     <View style={styles.cardContainer}>
-      {/* Header: Title and Single Strong Total */}
+      {/* 1. Header Layer: Title, Subtitle & Discreet Reset / Count Action */}
       <View style={styles.headerRow}>
-        <View>
+        <View style={styles.titleColumn}>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>
-            {selectedCategory ? `${selectedCategory.name}: ` : 'October: '}
-            <Text style={styles.totalHighlight}>
-              {formatCurrency(
-                selectedCategory ? selectedCategory.amountMinor : totalExpensesMinor
-              )}
-            </Text>
-          </Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
 
         {hasSelection ? (
-          <TouchableOpacity
-            onPress={() => setSelectedCategoryId(null)}
+          <AnimatedPressable
+            onPress={() => {
+              triggerHaptic.light();
+              setSelectedCategoryId(null);
+            }}
+            scaleTarget={MOTION.scale.buttonPress}
             style={styles.resetBadge}
-            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Show all categories"
             accessibilityRole="button">
             <Text style={styles.resetBadgeText}>Show all</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ) : (
-          <View style={styles.periodBadge}>
+          <View
+            style={styles.periodBadge}
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={`${categories.length} categories`}>
             <Text style={styles.periodBadgeText}>{categories.length} categories</Text>
           </View>
         )}
       </View>
 
-      {/* Proportional Segmented Distribution Bar */}
+      {/* 2. Total Spending Summary (Total amount permanently visible) */}
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryHeaderRow}>
+          <Text style={styles.summaryEyebrow}>Total expenses</Text>
+          {selectedCategory && (
+            <Animated.View
+              key={`focus-tag-${selectedCategory.id}`}
+              entering={FadeIn.duration(180)}
+              style={styles.focusChip}>
+              <View
+                style={[
+                  styles.focusDot,
+                  { backgroundColor: getCategoryColor(selectedCategory) },
+                ]}
+              />
+              <Text style={styles.focusText}>
+                {selectedCategory.name} · {computeCategoryShare(selectedCategory.amountMinor, effectiveTotalMinor)}%
+              </Text>
+            </Animated.View>
+          )}
+        </View>
+
+        <View style={styles.amountRow}>
+          <MoneyAmount
+            amountMinor={totalExpensesMinor}
+            currency="EUR"
+            locale="en-IE"
+            isHidden={isBalanceHidden}
+            size="editorial"
+            hideDecimals
+            accessibilityLabelPrefix="Total expenses"
+          />
+        </View>
+
+        <Text style={styles.summaryMetaText}>
+          {hasSelection
+            ? `Tap ${selectedCategory?.name} again or 'Show all' to clear filter`
+            : `Across all ${categories.length} categories`}
+        </Text>
+      </View>
+
+      {/* 3. Refined 11px Segmented Distribution Bar */}
       <View style={styles.segmentTrack}>
         {categories.map((cat, index) => {
           const isSelected = selectedCategoryId === cat.id;
           const isDimmed = hasSelection && !isSelected;
+          const color = getCategoryColor(cat);
+          const flexValue = Math.max(cat.amountMinor / effectiveTotalMinor, 0.05);
+          const share = computeCategoryShare(cat.amountMinor, effectiveTotalMinor);
 
           return (
-            <TouchableOpacity
+            <AnimatedSegmentPiece
               key={cat.id}
-              activeOpacity={0.75}
+              category={cat}
+              color={color}
+              flexValue={flexValue}
+              isSelected={isSelected}
+              isDimmed={isDimmed}
+              isFirst={index === 0}
+              isLast={index === categories.length - 1}
               onPress={() => handleToggleCategory(cat.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`${cat.name}, ${cat.percentage}%`}
-              style={[
-                styles.segmentPiece,
-                {
-                  flex: cat.percentage,
-                  backgroundColor: cat.color,
-                  opacity: isDimmed ? 0.25 : 1,
-                },
-                index === 0 && styles.firstSegment,
-                index === categories.length - 1 && styles.lastSegment,
-              ]}
+              share={share}
             />
           );
         })}
       </View>
 
-      {/* Categories List with Vector Icons and Proportional Progress Fill */}
+      {/* 4. Streamlined Category Rows (Zero Redundant Mini-Bars) */}
       <View style={styles.categoriesList}>
-        {categories.map((cat) => {
+        {categories.map((cat, index) => {
           const isSelected = selectedCategoryId === cat.id;
-          const isDimmed = hasSelection && !isSelected;
+          const color = getCategoryColor(cat);
+          const share = computeCategoryShare(cat.amountMinor, effectiveTotalMinor);
 
           return (
-            <TouchableOpacity
+            <Animated.View
               key={cat.id}
-              activeOpacity={0.7}
-              onPress={() => handleToggleCategory(cat.id)}
-              style={[
-                styles.categoryRow,
-                isDimmed && styles.unselectedCategoryRow,
-              ]}>
-              {/* Category Icon and Name */}
-              <View style={styles.categoryLeft}>
-                <View
-                  style={[
-                    styles.categoryIconCircle,
-                    { backgroundColor: `${cat.color}18` },
-                  ]}>
-                  {getCategoryIcon(cat.id, cat.color)}
-                </View>
-
-                <View style={styles.categoryTextGroup}>
-                  <Text style={styles.categoryName} numberOfLines={1}>
-                    {cat.name}
-                  </Text>
-                  <View style={styles.miniTrack}>
-                    <View
-                      style={[
-                        styles.miniFill,
-                        {
-                          width: `${cat.percentage}%`,
-                          backgroundColor: cat.color,
-                        },
-                      ]}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              {/* Amount and Percentage */}
-              <View style={styles.categoryRight}>
-                <Text style={styles.categoryAmount}>
-                  {formatCurrency(cat.amountMinor)}
-                </Text>
-                <View style={styles.percentagePill}>
-                  <Text style={styles.percentageText}>{cat.percentage}%</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
+              entering={FadeInUp.duration(350).delay(index * 30)}>
+              <AnimatedCategoryRow
+                category={cat}
+                color={color}
+                share={share}
+                isSelected={isSelected}
+                isBalanceHidden={isBalanceHidden}
+                onPress={() => handleToggleCategory(cat.id)}
+                renderIcon={getCategoryIcon}
+              />
+            </Animated.View>
           );
         })}
       </View>
@@ -186,152 +227,398 @@ export function CategoryBreakdown({
   );
 }
 
+interface SegmentPieceProps {
+  category: DemoCategoryItem;
+  color: string;
+  flexValue: number;
+  isSelected: boolean;
+  isDimmed: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onPress: () => void;
+  share: string;
+}
+
+function AnimatedSegmentPiece({
+  category,
+  color,
+  flexValue,
+  isSelected,
+  isDimmed,
+  isFirst,
+  isLast,
+  onPress,
+  share,
+}: SegmentPieceProps) {
+  const isReduced = useReducedMotion();
+  const opacity = useSharedValue(isDimmed ? 0.45 : 1);
+
+  useEffect(() => {
+    opacity.value = isReduced
+      ? (isDimmed ? 0.45 : 1)
+      : withTiming(isDimmed ? 0.45 : 1, { duration: 160 });
+  }, [isDimmed, isReduced, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        styles.segmentPieceWrapper,
+        { flex: flexValue },
+        animatedStyle,
+      ]}>
+      <Pressable
+        onPress={() => {
+          triggerHaptic.selection();
+          onPress();
+        }}
+        hitSlop={{ top: 12, bottom: 12, left: 2, right: 2 }}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+        accessibilityLabel={`${category.name}, ${share}%`}
+        accessibilityHint={isSelected ? 'Selected. Tap to return to total view' : 'Tap to focus on this category'}
+        style={[
+          styles.segmentPiece,
+          { backgroundColor: color },
+          isFirst && styles.firstSegment,
+          isLast && styles.lastSegment,
+          isSelected && styles.selectedSegment,
+        ]}
+      />
+    </Animated.View>
+  );
+}
+
+interface CategoryRowProps {
+  category: DemoCategoryItem;
+  color: string;
+  share: string;
+  isSelected: boolean;
+  isBalanceHidden: boolean;
+  onPress: () => void;
+  renderIcon: (id: string, color: string) => React.ReactNode;
+}
+
+function AnimatedCategoryRow({
+  category,
+  color,
+  share,
+  isSelected,
+  isBalanceHidden,
+  onPress,
+  renderIcon,
+}: CategoryRowProps) {
+  const isReduced = useReducedMotion();
+  const barProgress = useSharedValue(isSelected ? 1 : 0);
+
+  useEffect(() => {
+    barProgress.value = isReduced
+      ? (isSelected ? 1 : 0)
+      : withSpring(isSelected ? 1 : 0, MOTION.spring.selection);
+  }, [isSelected, isReduced, barProgress]);
+
+  const barAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: barProgress.value,
+    transform: [{ scaleY: barProgress.value }],
+  }));
+
+  const accessibleAmount = isBalanceHidden
+    ? 'amount hidden'
+    : `${Math.round(category.amountMinor / 100)} euros`;
+
+  return (
+    <AnimatedPressable
+      onPress={() => {
+        triggerHaptic.selection();
+        onPress();
+      }}
+      scaleTarget={MOTION.scale.cardPress}
+      activeOpacity={0.94}
+      style={[
+        styles.categoryRow,
+        isSelected && styles.categoryRowSelected,
+      ]}
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      accessibilityLabel={`${category.name}, ${share}% of spending, ${accessibleAmount}`}
+      accessibilityHint={isSelected ? 'Selected. Tap to return to total view' : 'Tap to focus on this category'}>
+      {/* Left Section: 3px Animated Vertical Accent Bar + Category Icon Circle + Name */}
+      <View style={styles.categoryLeft}>
+        <View style={styles.accentBarSlot}>
+          <Animated.View
+            style={[
+              styles.activeAccentBar,
+              { backgroundColor: color },
+              barAnimatedStyle,
+            ]}
+          />
+        </View>
+
+        <View
+          style={[
+            styles.categoryIconCircle,
+            { backgroundColor: `${color}18` },
+            isSelected && {
+              borderColor: `${color}40`,
+              borderWidth: 1,
+            },
+          ]}>
+          {renderIcon(category.id, color)}
+        </View>
+
+        <Text
+          style={[
+            styles.categoryName,
+            isSelected && styles.categoryNameSelected,
+          ]}
+          numberOfLines={1}>
+          {category.name}
+        </Text>
+      </View>
+
+      {/* Right Section: Tabular Amount + Percentage */}
+      <View style={styles.categoryRight}>
+        <MoneyAmount
+          amountMinor={category.amountMinor}
+          currency="EUR"
+          locale="en-IE"
+          isHidden={isBalanceHidden}
+          size="subcard"
+          hideDecimals
+          color={BRAND_COLORS.darkCharcoal}
+          accessibilityLabelPrefix={`${category.name} amount`}
+        />
+        <Text
+          style={[
+            styles.percentageText,
+            isSelected && { color: color, fontFamily: FONT_FAMILY.bold },
+          ]}>
+          {share}%
+        </Text>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
 const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: BRAND_COLORS.pureWhite,
     borderRadius: 24,
-    padding: Spacing.four,
+    padding: 20,
+    paddingBottom: 18,
     borderWidth: 1,
-    borderColor: BRAND_COLORS.cardBorder,
+    borderColor: 'rgba(168, 155, 190, 0.20)',
     shadowColor: BRAND_COLORS.darkCharcoal,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
-    marginBottom: Spacing.three,
+    marginBottom: 14,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.two + 4,
+    alignItems: 'flex-start',
+  },
+  titleColumn: {
+    flex: 1,
+    paddingRight: 10,
   },
   title: {
-    fontSize: 17,
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '400',
     color: BRAND_COLORS.secondaryText,
     marginTop: 2,
-  },
-  totalHighlight: {
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
+    letterSpacing: -0.1,
   },
   periodBadge: {
-    backgroundColor: BRAND_COLORS.veryLightLavender,
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(240, 236, 245, 0.75)',
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 155, 190, 0.16)',
   },
   periodBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: BRAND_COLORS.deepLavender,
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: BRAND_COLORS.secondaryText,
   },
   resetBadge: {
-    backgroundColor: BRAND_COLORS.veryLightLavender,
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(128, 103, 161, 0.10)',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(128, 103, 161, 0.25)',
   },
   resetBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 11.5,
+    fontWeight: '600',
     color: BRAND_COLORS.deepLavender,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.95 }],
+    opacity: 0.85,
+  },
+  summaryContainer: {
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  summaryHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  summaryEyebrow: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 12,
+    fontWeight: '500',
+    color: BRAND_COLORS.secondaryText,
+    letterSpacing: -0.1,
+  },
+  focusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(128, 103, 161, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  focusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  focusText: {
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 11,
+    fontWeight: '600',
+    color: BRAND_COLORS.deepLavender,
+  },
+  amountRow: {
+    marginTop: 2,
+  },
+  summaryMetaText: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400',
+    color: BRAND_COLORS.secondaryText,
+    marginTop: 2,
   },
   segmentTrack: {
     flexDirection: 'row',
     width: '100%',
-    height: 16,
-    borderRadius: 8,
+    height: 11,
+    borderRadius: 5.5,
     overflow: 'hidden',
-    backgroundColor: BRAND_COLORS.warmOffWhite,
-    gap: 2.5,
-    marginBottom: Spacing.three + 2,
+    backgroundColor: 'rgba(168, 155, 190, 0.14)',
+    gap: 2,
+    marginBottom: 14,
+  },
+  segmentPieceWrapper: {
+    height: '100%',
   },
   segmentPiece: {
     height: '100%',
   },
   firstSegment: {
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
+    borderTopLeftRadius: 5.5,
+    borderBottomLeftRadius: 5.5,
   },
   lastSegment: {
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
+    borderTopRightRadius: 5.5,
+    borderBottomRightRadius: 5.5,
+  },
+  selectedSegment: {
+    borderWidth: 1.5,
+    borderColor: BRAND_COLORS.pureWhite,
   },
   categoriesList: {
-    gap: 12,
+    gap: 4,
   },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 2,
+    paddingVertical: 8,
+    paddingRight: 6,
+    borderRadius: 12,
   },
-  unselectedCategoryRow: {
-    opacity: 0.35,
+  categoryRowSelected: {
+    backgroundColor: 'rgba(36, 37, 53, 0.02)',
+  },
+  rowPressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.9,
   },
   categoryLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    paddingRight: Spacing.three,
+    paddingRight: 10,
   },
-  categoryIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  accentBarSlot: {
+    width: 3,
+    height: 22,
+    marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
   },
-  categoryTextGroup: {
-    flex: 1,
+  activeAccentBar: {
+    width: 3,
+    height: 22,
+    borderRadius: 1.5,
+  },
+  categoryIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   categoryName: {
+    fontFamily: FONT_FAMILY.medium,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: BRAND_COLORS.darkCharcoal,
-    marginBottom: 5,
+    letterSpacing: -0.1,
+    flex: 1,
   },
-  miniTrack: {
-    height: 8,
-    backgroundColor: BRAND_COLORS.warmOffWhite,
-    borderRadius: 4,
-    overflow: 'hidden',
-    width: '88%',
-  },
-  miniFill: {
-    height: '100%',
-    borderRadius: 4,
+  categoryNameSelected: {
+    fontFamily: FONT_FAMILY.bold,
+    fontWeight: '700',
   },
   categoryRight: {
     alignItems: 'flex-end',
-    gap: 2,
-  },
-  categoryAmount: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-    fontVariant: ['tabular-nums'],
-  },
-  percentagePill: {
-    backgroundColor: BRAND_COLORS.warmOffWhite,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 5,
+    justifyContent: 'center',
   },
   percentageText: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 11.5,
+    fontWeight: '500',
     color: BRAND_COLORS.secondaryText,
+    marginTop: 1,
+    fontVariant: ['tabular-nums'],
   },
 });
