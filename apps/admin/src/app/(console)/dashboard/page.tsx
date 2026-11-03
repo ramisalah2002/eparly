@@ -1,187 +1,277 @@
-import { Suspense } from "react";
+import { Activity, BarChart3, CalendarClock, ClipboardCheck, History, Layers, ShieldCheck, Tags } from "lucide-react";
+import Link from "next/link";
+import { Suspense, type ReactNode } from "react";
 import { ApiProblem } from "@/components/api-problem";
-import { Card, Notice, OfferStatusBadge, PageHeader, Skeleton, TextLink } from "@/components/ui";
+import { buttonClass } from "@/components/button-class";
+import { ColumnChart, HorizontalBars, Legend, ProgressRing, type Series } from "@/components/charts";
+import { SectorIcon } from "@/components/sector-icon";
+import { Badge, Card, Notice, OfferStatusBadge, Skeleton, TextLink } from "@/components/ui";
 import { blockingCount, publicationChecklist } from "@/lib/checklist";
+import {
+  monthKey,
+  monthlyActivity,
+  recentByDay,
+  sectorProgress,
+  statusDistribution,
+  type SectorState,
+} from "@/lib/dashboard-data";
 import { formatDateTime, OFFER_STATUS_LABELS, SECTOR_LABELS } from "@/lib/format";
+import { shortPrice } from "@/lib/pricing";
 import { listAllOffers, listProviders, listSyncRuns } from "@/lib/server/catalog";
-import { OFFER_STATUSES, SECTORS, type CommercialOffer } from "@/lib/types";
 
 export const metadata = { title: "Tableau de bord — Eparly Admin" };
 
+const ACTIVITY_SERIES: Series[] = [
+  { key: "offersAdded", label: "Offres ajoutées", colorClass: "bg-chart-1" },
+  { key: "evidenceVerified", label: "Preuves vérifiées", colorClass: "bg-chart-2" },
+];
+
+const SECTOR_STATE: Record<SectorState, { label: string; tone: "ok" | "warn" | "danger" | "neutral" }> = {
+  complete: { label: "À jour", tone: "ok" },
+  "in-review": { label: "Revue en cours", tone: "warn" },
+  missing: { label: "Preuves manquantes", tone: "danger" },
+  empty: { label: "Aucune offre", tone: "neutral" },
+};
+
+const timeFormatter = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short", timeZone: "Europe/Paris" });
+
 export default function DashboardPage() {
   return (
-    <>
-      <PageHeader
-        title="Tableau de bord"
-        description="État du catalogue et opérations prioritaires, calculés à partir des données réelles de l'API."
-      />
-      <Suspense fallback={<Skeleton rows={8} />}>
-        <DashboardContent />
-      </Suspense>
-    </>
-  );
-}
-
-function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-surface px-4 py-3">
-      <p className="text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
-    </div>
-  );
-}
-
-function pendingEvidenceCount(offers: CommercialOffer[]): number {
-  return offers.reduce(
-    (sum, offer) => sum + (offer.evidence ?? []).filter((e) => e.verificationStatus === "PENDING").length,
-    0,
+    <Suspense fallback={<Skeleton rows={10} />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 
 async function DashboardContent() {
   const [offersResult, providersResult] = await Promise.all([listAllOffers(), listProviders(0, 1)]);
-  if (!offersResult.ok) return <ApiProblem result={offersResult} context="chargement du catalogue" />;
+  const now = new Date();
+
+  const header = (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <h1 className="text-2xl font-semibold tracking-tight">Tableau de bord</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-2 text-muted shadow-card">
+          <CalendarClock aria-hidden className="size-4" />
+          Données au {formatDateTime(now.toISOString())}
+        </span>
+        <Link href="/catalog/reviews" className={`${buttonClass("primary")} gap-2 py-2`}>
+          <ClipboardCheck aria-hidden className="size-4" />
+          Revue des preuves
+        </Link>
+      </div>
+    </div>
+  );
+
+  if (!offersResult.ok) {
+    return (
+      <>
+        {header}
+        <ApiProblem result={offersResult} context="chargement du catalogue" />
+      </>
+    );
+  }
 
   const { offers, totalElements, truncated } = offersResult.data;
-  const byStatus = Object.fromEntries(OFFER_STATUSES.map((s) => [s, offers.filter((o) => o.publicationStatus === s).length]));
-  const bySector = SECTORS.map((sector) => [sector, offers.filter((o) => o.sector === sector).length] as const);
-  const pendingEvidence = pendingEvidenceCount(offers);
-  const active = offers.filter((o) => o.publicationStatus !== "ARCHIVED");
-  const blocked = active.filter((o) => blockingCount(publicationChecklist(o, o.evidence ?? [])) > 0);
-  const recent = [...offers].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 8);
+  const published = offers.filter((o) => o.publicationStatus === "VERIFIED").length;
+  const pendingEvidence = offers.reduce(
+    (sum, o) => sum + (o.evidence ?? []).filter((e) => e.verificationStatus === "PENDING").length,
+    0,
+  );
+  const blocked = offers.filter(
+    (o) => o.publicationStatus !== "ARCHIVED" && blockingCount(publicationChecklist(o, o.evidence ?? [], now)) > 0,
+  ).length;
+  const currentMonth = monthKey(now);
+  const activity = monthlyActivity(offers, now).map((m) => ({
+    key: m.key,
+    label: m.label,
+    fullLabel: m.fullLabel,
+    values: { offersAdded: m.offersAdded, evidenceVerified: m.evidenceVerified },
+    highlight: m.key === currentMonth,
+  }));
+  const sectors = sectorProgress(offers);
+  const statuses = statusDistribution(offers);
+  const groups = recentByDay(offers, now);
 
   return (
-    <div className="space-y-6">
-      {truncated && (
-        <Notice title="Vue partielle">
-          Seules les {offers.length} premières offres sur {totalElements} sont agrégées. Un endpoint d&apos;agrégats côté
-          backend est nécessaire pour un décompte exact.
-        </Notice>
-      )}
-      {byStatus.VERIFIED === 0 && totalElements > 0 && (
-        <Notice tone="lavender" title="Aucune offre publiée">
-          Toutes les offres sont hors publication. Les blocages sont détaillés sur chaque fiche.
-        </Notice>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
-        <Stat label="Offres" value={totalElements} />
-        {OFFER_STATUSES.map((status) => (
-          <Stat key={status} label={OFFER_STATUS_LABELS[status]} value={byStatus[status]} />
-        ))}
-        <Stat
-          label="Fournisseurs"
-          value={providersResult.ok ? providersResult.data.totalElements : "Non disponible"}
-        />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card title="À traiter">
-          <ul className="space-y-3">
-            <li className="flex items-center justify-between gap-2">
-              <span>Preuves à vérifier</span>
-              <span className="flex items-center gap-3">
-                <span className="font-semibold tabular-nums">{pendingEvidence}</span>
-                <TextLink href="/catalog/reviews">Ouvrir la file</TextLink>
-              </span>
-            </li>
-            <li className="flex items-center justify-between gap-2">
-              <span>Offres non archivées avec blocage</span>
-              <span className="flex items-center gap-3">
-                <span className="font-semibold tabular-nums">{blocked.length}</span>
-                <TextLink href="/catalog/offers?blocked=1">Voir</TextLink>
-              </span>
-            </li>
-            <li className="flex items-center justify-between gap-2">
-              <span>Droits de réutilisation</span>
-              <span className="text-right text-muted">Non exposés par l&apos;API</span>
-            </li>
-          </ul>
-        </Card>
-
-        <Card title="Répartition par secteur">
-          <ul className="space-y-2">
-            {bySector.map(([sector, count]) => (
-              <li key={sector} className="flex items-center justify-between">
-                <TextLink href={`/catalog/offers?sector=${sector}`}>{SECTOR_LABELS[sector]}</TextLink>
-                <span className="font-semibold tabular-nums">{count}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Suspense fallback={<Card title="Collecte du catalogue"><Skeleton rows={3} /></Card>}>
-          <SyncCard />
-        </Suspense>
-      </div>
-
-      <Card title="Dernières modifications">
-        {recent.length === 0 ? (
-          <p className="text-muted">Aucune offre dans le catalogue.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {recent.map((offer) => (
-              <li key={offer.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <span className="min-w-0">
-                  <TextLink href={`/catalog/offers/${offer.id}`}>{offer.commercialName}</TextLink>
-                  <span className="ml-2 text-muted">{offer.provider.name}</span>
-                </span>
-                <span className="flex items-center gap-3">
-                  <OfferStatusBadge status={offer.publicationStatus} />
-                  <span className="text-muted tabular-nums">{formatDateTime(offer.updatedAt)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+    <>
+      {header}
+      <div className="space-y-6">
+        {truncated && (
+          <Notice title="Vue partielle">
+            Seules les {offers.length} premières offres sur {totalElements} sont agrégées. Un endpoint d&apos;agrégats côté
+            backend est nécessaire pour un décompte exact.
+          </Notice>
         )}
-      </Card>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card title="Catalogue" icon={<Tags className="size-4" />}>
+            <p className="text-5xl font-semibold tracking-tight">{totalElements}</p>
+            <p className="mt-1 text-muted">
+              offre{totalElements > 1 ? "s" : ""} au catalogue · {published} publiée{published > 1 ? "s" : ""} ·{" "}
+              {providersResult.ok ? `${providersResult.data.totalElements} fournisseurs` : "fournisseurs non disponibles"}
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Tile
+                label="Preuves à vérifier"
+                value={pendingEvidence}
+                badge={pendingEvidence > 0 ? <Badge tone="warn">À traiter</Badge> : <Badge tone="ok">À jour</Badge>}
+                footer={<TextLink href="/catalog/reviews">Ouvrir la file</TextLink>}
+              />
+              <Tile
+                label="Offres avec blocage"
+                value={blocked}
+                badge={blocked > 0 ? <Badge tone="danger">Bloquées</Badge> : <Badge tone="ok">Aucun</Badge>}
+                footer={<TextLink href="/catalog/offers?blocked=1">Voir les offres</TextLink>}
+              />
+            </div>
+            {published === 0 && totalElements > 0 && (
+              <p className="mt-4 text-xs text-muted">
+                Aucune offre publiée. Droits de réutilisation : non exposés par l&apos;API, à documenter hors back-office.
+              </p>
+            )}
+          </Card>
+
+          <Card title="Activité du catalogue" icon={<BarChart3 className="size-4" />} actions={<Legend series={ACTIVITY_SERIES} />}>
+            <ColumnChart
+              data={activity}
+              series={ACTIVITY_SERIES}
+              caption="Offres ajoutées et preuves vérifiées par mois, sur les 6 derniers mois"
+            />
+          </Card>
+        </div>
+
+        <div className="grid items-start gap-6 xl:grid-cols-[2fr_3fr]">
+          <div className="space-y-6">
+          <Card title="Vérification par secteur" icon={<ShieldCheck className="size-4" />}>
+            <ul className="divide-y divide-border">
+              {sectors.map((s) => (
+                <li key={s.sector} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                  <ProgressRing
+                    percent={s.percent}
+                    label={
+                      s.percent === null
+                        ? `${SECTOR_LABELS[s.sector]} : aucune offre`
+                        : `${SECTOR_LABELS[s.sector]} : ${s.percent} % des offres ont une preuve vérifiée`
+                    }
+                  />
+                  <div className="min-w-0 flex-1">
+                    <TextLink href={`/catalog/offers?sector=${s.sector}`}>{SECTOR_LABELS[s.sector]}</TextLink>
+                    <p className="text-xs text-muted">
+                      {s.withVerifiedProof}/{s.total} offre{s.total > 1 ? "s" : ""} avec preuve vérifiée
+                      {s.pendingEvidence > 0 && ` · ${s.pendingEvidence} en attente`}
+                    </p>
+                  </div>
+                  <Badge tone={SECTOR_STATE[s.state].tone}>{SECTOR_STATE[s.state].label}</Badge>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
+          <Card title="Offres par statut" icon={<Layers className="size-4" />}>
+            <HorizontalBars
+              caption="Nombre d'offres par statut de publication"
+              items={statuses.map((s) => ({ key: s.status, label: OFFER_STATUS_LABELS[s.status], value: s.count }))}
+            />
+          </Card>
+
+          <Suspense fallback={<Card title="Collecte du catalogue" icon={<Activity className="size-4" />}><Skeleton rows={3} /></Card>}>
+            <SyncCard />
+          </Suspense>
+          </div>
+
+          <Card title="Dernières modifications" icon={<History className="size-4" />} actions={<TextLink href="/catalog/offers">Tout voir</TextLink>}>
+            {groups.length === 0 ? (
+              <p className="text-muted">Aucune offre dans le catalogue.</p>
+            ) : (
+              <div className="space-y-4">
+                {groups.map((group) => (
+                  <section key={group.key} aria-label={group.label}>
+                    <div className="flex items-center justify-between rounded-xl bg-background px-3 py-2 text-muted">
+                      <span>{group.label}</span>
+                      <span>
+                        {group.offers.length} modification{group.offers.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-border">
+                      {group.offers.map((offer) => (
+                        <li key={offer.id} className="flex flex-wrap items-center gap-3 px-1 py-3 sm:flex-nowrap">
+                          <SectorIcon sector={offer.sector} />
+                          <div className="min-w-0 flex-1">
+                            <Link href={`/catalog/offers/${offer.id}`} className="block truncate font-medium hover:underline">
+                              {offer.commercialName}
+                            </Link>
+                            <p className="truncate text-xs text-muted">{offer.provider.name}</p>
+                          </div>
+                          <span className="hidden max-w-56 truncate text-muted lg:block">{shortPrice(offer.pricing)}</span>
+                          <span className="w-12 text-right tabular-nums text-muted">{timeFormatter.format(new Date(offer.updatedAt))}</span>
+                          <OfferStatusBadge status={offer.publicationStatus} />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Tile({ label, value, badge, footer }: { label: string; value: number; badge: ReactNode; footer: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4">
+      <p className="font-medium">{label}</p>
+      <div className="mt-3 flex items-end justify-between gap-2">
+        <span className="text-3xl font-semibold">{value}</span>
+        {badge}
+      </div>
+      <div className="mt-2 text-xs">{footer}</div>
     </div>
   );
 }
 
 // Valeurs de la contrainte chk_catalog_sync_run_status (migration V20).
-const SYNC_STATUS_LABELS: Record<string, string> = {
-  RUNNING: "En cours",
-  SUCCEEDED: "Réussie",
-  PARTIAL_FAILURE: "Échec partiel",
-  FAILED: "Échec",
-  SKIPPED: "Ignorée",
+const SYNC_STATUS: Record<string, { label: string; tone: "ok" | "warn" | "danger" | "neutral" }> = {
+  RUNNING: { label: "En cours", tone: "warn" },
+  SUCCEEDED: { label: "Réussie", tone: "ok" },
+  PARTIAL_FAILURE: { label: "Échec partiel", tone: "warn" },
+  FAILED: { label: "Échec", tone: "danger" },
+  SKIPPED: { label: "Ignorée", tone: "neutral" },
 };
 
 async function SyncCard() {
   const runs = await listSyncRuns(10);
+  const icon = <Activity className="size-4" />;
   if (!runs.ok) {
     return (
-      <Card title="Collecte du catalogue">
+      <Card title="Collecte du catalogue" icon={icon}>
         <p className="text-muted">État du batch non disponible (HTTP {runs.status || "réseau"}).</p>
       </Card>
     );
   }
   const latest = runs.data[0];
   const lastSuccess = runs.data.find((run) => run.status === "SUCCEEDED");
+  const status = latest?.status ? SYNC_STATUS[latest.status] : undefined;
   return (
-    <Card title="Collecte du catalogue">
+    <Card title="Collecte du catalogue" icon={icon} actions={status && <Badge tone={status.tone}>{status.label}</Badge>}>
       {!latest ? (
         <p className="text-muted">Aucune exécution enregistrée.</p>
       ) : (
-        <dl className="space-y-2">
-          <div className="flex justify-between gap-2">
-            <dt className="text-muted">Dernière exécution</dt>
-            <dd className="text-right">{formatDateTime(latest.startedAt)}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-muted">Résultat</dt>
-            <dd className="text-right">{SYNC_STATUS_LABELS[latest.status ?? ""] ?? latest.status ?? "Inconnu"}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-muted">Erreurs</dt>
-            <dd className="text-right tabular-nums">{latest.errorsCount}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-muted">Dernière réussite</dt>
-            <dd className="text-right">{lastSuccess ? formatDateTime(lastSuccess.finishedAt) : "Aucune parmi les dernières"}</dd>
-          </div>
+        <dl className="grid grid-cols-2 gap-3">
+          {[
+            ["Dernière exécution", formatDateTime(latest.startedAt)],
+            ["Dernière réussite", lastSuccess ? formatDateTime(lastSuccess.finishedAt) : "Aucune récente"],
+            ["Offres découvertes / mises à jour", `${latest.offersDiscovered} / ${latest.offersUpdated}`],
+            ["Erreurs", String(latest.errorsCount)],
+          ].map(([term, value]) => (
+            <div key={term} className="rounded-2xl bg-background px-3 py-2">
+              <dt className="text-xs text-muted">{term}</dt>
+              <dd className="mt-0.5 font-semibold">{value}</dd>
+            </div>
+          ))}
         </dl>
       )}
       <p className="mt-3 text-xs text-muted">

@@ -1,23 +1,34 @@
 @import "tailwindcss";
 
-/* Identité Eparly : lavande #A89BBE et beige #D8C3A8 sur fond neutre (cahier des charges §9.1). */
+/*
+ * Palette alignée sur l'application mobile (apps/mobile/src/constants/colors.ts, BRAND_COLORS).
+ * Les pastels servent aux fonds, pastilles et pistes de jauge ; les marques de graphe
+ * utilisent --chart-1/--chart-2, un cran plus saturés pour passer les contrôles de
+ * lisibilité (contraste ≥ 3:1, séparation daltonisme) sur fond blanc.
+ */
 :root {
-  --background: #f7f6f9;
+  --background: #faf9f6; /* warmOffWhite */
   --surface: #ffffff;
-  --foreground: #1f1d2b;
-  --muted: #625e70;
-  --border: #e3e0ea;
-  --lavender: #a89bbe;
-  --lavender-strong: #5b4d7a;
-  --lavender-soft: #efebf5;
-  --beige: #d8c3a8;
-  --beige-soft: #f6efe6;
-  --ok: #1f7a4d;
-  --ok-soft: #e5f4ec;
-  --warn: #8a5a00;
-  --warn-soft: #fdf3dc;
-  --danger: #b42318;
-  --danger-soft: #fdecea;
+  --foreground: #242535; /* darkCharcoal */
+  /* secondaryText (#737382) et deepLavender (#8067A1) assombris d'un cran : contraste AA
+     sur le fond crème et sur les pastilles lavande. */
+  --muted: #6e6e7d;
+  --border: rgba(168, 155, 190, 0.2); /* cardBorder */
+  --border-strong: rgba(168, 155, 190, 0.45); /* borderLavender */
+  --lavender: #a89bbe; /* mutedLavender */
+  --lavender-strong: #735a98;
+  --lavender-soft: #f0ecf5; /* veryLightLavender */
+  --beige: #d8c3a8; /* warmSandBeige */
+  --beige-soft: #f1e5d7; /* veryLightBeige */
+  --brand-green: #14907a; /* « e » du logo */
+  --chart-1: #7a55b5;
+  --chart-2: #2e9e7c;
+  --ok: #23795f;
+  --ok-soft: #e4f6f0; /* softMintBackground */
+  --warn: #8a6a12;
+  --warn-soft: #fbf3dc;
+  --danger: #b5483d;
+  --danger-soft: #fceae7;
 }
 
 @theme inline {
@@ -26,19 +37,24 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-lavender: var(--lavender);
   --color-lavender-strong: var(--lavender-strong);
   --color-lavender-soft: var(--lavender-soft);
   --color-beige: var(--beige);
   --color-beige-soft: var(--beige-soft);
+  --color-brand-green: var(--brand-green);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-spline), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow-card: 0 4px 12px rgba(36, 37, 53, 0.05);
 }
 
 body {

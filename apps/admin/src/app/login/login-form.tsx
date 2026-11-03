@@ -48,7 +48,7 @@ export function LoginForm() {
           type="email"
           autoComplete="username"
           required
-          className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2"
+          className="mt-1 w-full rounded-xl border border-border bg-surface px-3 py-2"
         />
       </div>
       <div>
@@ -61,11 +61,11 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
-          className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2"
+          className="mt-1 w-full rounded-xl border border-border bg-surface px-3 py-2"
         />
       </div>
       {error && (
-        <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-danger">
+        <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-danger">
           {error}
         </p>
       )}

@@ -38,7 +38,7 @@ export function ConfirmDialog({
     <dialog
       ref={ref}
       onClose={onClose}
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-foreground/30"
+      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-3xl border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-foreground/30"
     >
       <div className="p-5">
         <h2 className="text-base font-semibold">{title}</h2>

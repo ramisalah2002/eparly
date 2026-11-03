@@ -102,10 +102,10 @@ async function OffersContent({ searchParams }: { searchParams: PageProps<"/catal
 
   return (
     <div className="space-y-4">
-      <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-3">
+      <form method="get" className="flex flex-wrap items-end gap-3 rounded-3xl border border-border bg-surface shadow-card p-3">
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">Statut</span>
-          <select name="status" defaultValue={filters.status ?? ""} className="rounded-md border border-border bg-surface px-2 py-1.5">
+          <select name="status" defaultValue={filters.status ?? ""} className="rounded-xl border border-border bg-surface px-2 py-1.5">
             <option value="">Tous</option>
             {OFFER_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -116,7 +116,7 @@ async function OffersContent({ searchParams }: { searchParams: PageProps<"/catal
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">Secteur</span>
-          <select name="sector" defaultValue={filters.sector ?? ""} className="rounded-md border border-border bg-surface px-2 py-1.5">
+          <select name="sector" defaultValue={filters.sector ?? ""} className="rounded-xl border border-border bg-surface px-2 py-1.5">
             <option value="">Tous</option>
             {SECTORS.map((s) => (
               <option key={s} value={s}>
@@ -130,7 +130,7 @@ async function OffersContent({ searchParams }: { searchParams: PageProps<"/catal
           <select
             name="providerId"
             defaultValue={filters.providerId ?? ""}
-            className="max-w-64 rounded-md border border-border bg-surface px-2 py-1.5"
+            className="max-w-64 rounded-xl border border-border bg-surface px-2 py-1.5"
             disabled={!providers.ok}
           >
             <option value="">{providers.ok ? "Tous" : "Liste non disponible"}</option>
@@ -170,7 +170,7 @@ async function OffersContent({ searchParams }: { searchParams: PageProps<"/catal
           {!hasFilters && "Les offres apparaîtront ici après import ou création via l'API."}
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+        <div className="overflow-x-auto rounded-3xl border border-border bg-surface shadow-card">
           <table className="w-full min-w-[60rem] text-left">
             <thead className="border-b border-border bg-background text-xs uppercase tracking-wide text-muted">
               <tr>
@@ -201,7 +201,7 @@ async function OffersContent({ searchParams }: { searchParams: PageProps<"/catal
                     <td className="px-3 py-2">
                       <OfferStatusBadge status={offer.publicationStatus} />
                     </td>
-                    <td className="px-3 py-2 tabular-nums">
+                    <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                       {evidence.length === 0 ? (
                         <Badge tone="danger">Aucune</Badge>
                       ) : (

@@ -8,16 +8,16 @@ type Tone = "neutral" | "lavender" | "beige" | "ok" | "warn" | "danger";
 
 const TONES: Record<Tone, string> = {
   neutral: "bg-background text-muted border-border",
-  lavender: "bg-lavender-soft text-lavender-strong border-lavender/40",
-  beige: "bg-beige-soft text-[#6b5435] border-beige/60",
-  ok: "bg-ok-soft text-ok border-ok/20",
-  warn: "bg-warn-soft text-warn border-warn/20",
-  danger: "bg-danger-soft text-danger border-danger/20",
+  lavender: "bg-lavender-soft text-lavender-strong border-transparent",
+  beige: "bg-beige-soft text-[#6b5435] border-transparent",
+  ok: "bg-ok-soft text-ok border-transparent",
+  warn: "bg-warn-soft text-warn border-transparent",
+  danger: "bg-danger-soft text-danger border-transparent",
 };
 
 export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
   return (
-    <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${TONES[tone]}`}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}>
       {children}
     </span>
   );
@@ -54,26 +54,40 @@ export function CheckBadge({ state }: { state: CheckState }) {
   return <Badge tone={CHECK_TONES[state]}>{CHECK_LABELS[state]}</Badge>;
 }
 
+/** Carte au style de l'app mobile : rayon 24 px, bordure lavande légère, ombre douce. */
 export function Card({
   id,
   title,
+  icon,
   actions,
   children,
+  className = "",
 }: {
   id?: string;
   title?: ReactNode;
+  icon?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section id={id} className="scroll-mt-4 rounded-lg border border-border bg-surface">
+    <section id={id} className={`scroll-mt-4 rounded-3xl border border-border bg-surface shadow-card ${className}`}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-          {title && <h2 className="text-sm font-semibold">{title}</h2>}
+        <header className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
+          {title && (
+            <h2 className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight">
+              {icon && (
+                <span aria-hidden className="flex size-8 items-center justify-center rounded-xl bg-lavender-soft text-lavender-strong">
+                  {icon}
+                </span>
+              )}
+              {title}
+            </h2>
+          )}
           {actions}
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }
@@ -92,7 +106,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
 
 export function Notice({ tone = "warn", title, children }: { tone?: "warn" | "danger" | "lavender" | "ok"; title?: string; children: ReactNode }) {
   return (
-    <div role={tone === "danger" ? "alert" : "note"} className={`rounded-lg border px-4 py-3 ${TONES[tone]}`}>
+    <div role={tone === "danger" ? "alert" : "note"} className={`rounded-2xl border px-4 py-3 ${TONES[tone]}`}>
       {title && <p className="font-semibold">{title}</p>}
       <div className={title ? "mt-1" : ""}>{children}</div>
     </div>
@@ -101,7 +115,7 @@ export function Notice({ tone = "warn", title, children }: { tone?: "warn" | "da
 
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-surface px-6 py-10 text-center">
+    <div className="rounded-3xl border border-dashed border-border-strong bg-surface px-6 py-10 text-center">
       <p className="font-medium">{title}</p>
       {children && <div className="mt-1 text-muted">{children}</div>}
     </div>

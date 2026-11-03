@@ -1,6 +1,6 @@
 export function buttonClass(variant: "primary" | "secondary" | "danger"): string {
   const base =
-    "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
   switch (variant) {
     case "primary":
       return `${base} bg-lavender-strong text-white hover:bg-lavender-strong/90`;

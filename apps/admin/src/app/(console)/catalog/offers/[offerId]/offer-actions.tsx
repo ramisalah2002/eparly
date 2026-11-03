@@ -80,7 +80,7 @@ export function OfferActions({
       {feedback && (
         <p
           role={feedback.tone === "error" ? "alert" : "status"}
-          className={`rounded-md px-3 py-2 ${feedback.tone === "error" ? "bg-danger-soft text-danger" : "bg-ok-soft text-ok"}`}
+          className={`rounded-xl px-3 py-2 ${feedback.tone === "error" ? "bg-danger-soft text-danger" : "bg-ok-soft text-ok"}`}
         >
           {feedback.text}
         </p>
@@ -100,7 +100,7 @@ export function OfferActions({
           l&apos;offre reste inchangée et le motif est affiché.
         </p>
         {blockingItems > 0 && (
-          <p className="rounded-md bg-warn-soft px-3 py-2 text-warn">
+          <p className="rounded-xl bg-warn-soft px-3 py-2 text-warn">
             {blockingItems} blocage{blockingItems > 1 ? "s" : ""} détecté{blockingItems > 1 ? "s" : ""} : un refus est probable.
           </p>
         )}

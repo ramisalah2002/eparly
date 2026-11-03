@@ -114,7 +114,7 @@ export function EvidenceReview({
             rows={4}
             maxLength={2000}
             aria-describedby={`${ids}-summary-hint`}
-            className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-foreground"
+            className="mt-1 w-full rounded-xl border border-border bg-surface px-3 py-2 text-foreground"
           />
           <p id={`${ids}-summary-hint`} className="mt-1 text-xs">
             Ce qui a été constaté sur la source : prix, conditions, date de consultation. {MIN_SUMMARY} caractères minimum.
@@ -127,7 +127,7 @@ export function EvidenceReview({
           </label>
         )}
         {error && (
-          <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-danger">
+          <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-danger">
             {error}
           </p>
         )}

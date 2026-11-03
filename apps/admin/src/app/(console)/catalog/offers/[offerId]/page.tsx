@@ -229,7 +229,7 @@ function ConditionsCard({ offer }: { offer: CommercialOffer }) {
       ) : characteristics.entries.length === 0 ? (
         <p className="text-muted">Aucune caractéristique renseignée.</p>
       ) : (
-        <ul className="divide-y divide-border rounded-md border border-border">
+        <ul className="divide-y divide-border rounded-xl border border-border">
           {characteristics.entries.map((entry) => (
             <li key={entry.key} className="px-3 py-2">
               <div className="flex flex-wrap justify-between gap-2">
@@ -261,7 +261,7 @@ function EvidenceCard({ offer, evidences }: { offer: CommercialOffer; evidences:
               (evidence.verifiedPricingVersion !== offer.pricing.version ||
                 evidence.verifiedProviderVersion !== offer.provider.version);
             return (
-              <li key={evidence.id} className="rounded-md border border-border p-3">
+              <li key={evidence.id} className="rounded-xl border border-border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <EvidenceStatusBadge status={evidence.verificationStatus} />
                   {evidence.evidenceScope && <Badge tone="lavender">{EVIDENCE_SCOPE_LABELS[evidence.evidenceScope]}</Badge>}

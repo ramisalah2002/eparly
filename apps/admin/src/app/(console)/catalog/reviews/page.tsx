@@ -40,7 +40,7 @@ async function ReviewsContent() {
       {queue.length === 0 ? (
         <EmptyState title="Aucune preuve en attente">Toutes les preuves enregistrées ont reçu une décision.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+        <div className="overflow-x-auto rounded-3xl border border-border bg-surface shadow-card">
           <table className="w-full min-w-[56rem] text-left">
             <thead className="border-b border-border bg-background text-xs uppercase tracking-wide text-muted">
               <tr>
