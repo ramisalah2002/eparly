@@ -40,6 +40,7 @@ import org.hamcrest.Matchers;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -758,6 +759,7 @@ class OfferCatalogIntegrationTest {
     @Test
     @DisplayName("Un fournisseur inactif, une offre future ou une validation inconnue ne sont pas publiés")
     void inactiveFutureAndUnknownVerificationAreExcluded() throws Exception {
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/Paris"));
         User user = activeUser();
 
         OfferProvider inactiveProvider = createProvider("Inactive", OfferSector.STREAMING, "https://inactive.example");
@@ -772,7 +774,7 @@ class OfferCatalogIntegrationTest {
         OfferProvider futureProvider = createProvider("Future", OfferSector.STREAMING, "https://future.example");
         CommercialOffer futureOffer = createDraftOffer(futureProvider, "Future Offer", OfferSector.STREAMING);
         futureOffer.setPublicationStatus(OfferStatus.VERIFIED);
-        futureOffer.setValidFrom(LocalDate.now().plusDays(1));
+        futureOffer.setValidFrom(today.plusDays(1));
         offerRepository.saveAndFlush(futureOffer);
         createPricing(futureOffer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(futureOffer, "https://future.example/offer");

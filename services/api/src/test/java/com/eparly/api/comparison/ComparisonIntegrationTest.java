@@ -47,6 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -1015,6 +1016,7 @@ class ComparisonIntegrationTest {
     @Test
     @DisplayName("Les offres futures et celles dont le fournisseur est inactif sont exclues")
     void futureAndInactiveOffersAreExcluded() throws Exception {
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/Paris"));
         User user = activeUser("unavailable-offers@eparly.test");
         Account account = createAccount(user, "Compte");
         Subscription sub = createSubscription(user, account, "Mobile", "Actuel");
@@ -1025,7 +1027,7 @@ class ComparisonIntegrationTest {
         providerRepository.saveAndFlush(inactiveProvider);
         CommercialOffer inactiveOffer = createOffer(inactiveProvider, "Inactive Offer", OfferSector.MOBILE_PLAN,
                 "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
-                LocalDate.now(), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+                today, today.plusMonths(1), OfferStatus.VERIFIED);
         createPricing(inactiveOffer, 999L, OfferBillingPeriod.MONTHLY);
         createEvidence(inactiveOffer, "https://inactive-mobile.example/offer", EvidenceStatus.VERIFIED);
 
@@ -1033,7 +1035,7 @@ class ComparisonIntegrationTest {
                 "https://future-mobile.example");
         CommercialOffer futureOffer = createOffer(futureProvider, "Future Offer", OfferSector.MOBILE_PLAN,
                 "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
-                LocalDate.now().plusDays(1), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+                today.plusDays(1), today.plusMonths(1), OfferStatus.VERIFIED);
         createPricing(futureOffer, 999L, OfferBillingPeriod.MONTHLY);
         createEvidence(futureOffer, "https://future-mobile.example/offer", EvidenceStatus.VERIFIED);
 

@@ -31,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @Import(TestJwtConfiguration.class)
 class SubscriptionTrackingIntegrationTest {
-    private static final LocalDate TODAY = LocalDate.now();
+    private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Europe/Paris"));
     private static final UUID TRANSFERS = UUID.fromString("550e8400-e001-0000-0000-00000000000b");
 
     @Container
