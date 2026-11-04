@@ -41,6 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -780,6 +781,7 @@ class SavingsIntegrationTest {
     @Test
     @DisplayName("Une offre future, un fournisseur inactif ou une preuve expirée ne peut pas être estimée")
     void unavailableOfferCannotBeEstimated() throws Exception {
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/Paris"));
         User user = activeUser("unavailable-saving@eparly.test");
         Account account = createAccount(user, "Compte");
         Subscription sub = createSubscription(user, account, "Mobile", "Actuel", 1999L,
@@ -789,7 +791,7 @@ class SavingsIntegrationTest {
                 "https://future-saving.example");
         CommercialOffer future = createOffer(futureProvider, "Future Plan", OfferSector.MOBILE_PLAN,
                 "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
-                LocalDate.now().plusDays(1), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+                today.plusDays(1), today.plusMonths(1), OfferStatus.VERIFIED);
         createPricing(future, 999L, OfferBillingPeriod.MONTHLY, 0L, null, null, null);
         createEvidence(future, "https://future-saving.example/offer", EvidenceStatus.VERIFIED);
 
@@ -799,7 +801,7 @@ class SavingsIntegrationTest {
         providerRepository.saveAndFlush(inactiveProvider);
         CommercialOffer inactive = createOffer(inactiveProvider, "Inactive Plan", OfferSector.MOBILE_PLAN,
                 "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
-                LocalDate.now(), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+                today, today.plusMonths(1), OfferStatus.VERIFIED);
         createPricing(inactive, 999L, OfferBillingPeriod.MONTHLY, 0L, null, null, null);
         createEvidence(inactive, "https://inactive-saving.example/offer", EvidenceStatus.VERIFIED);
 
@@ -807,7 +809,7 @@ class SavingsIntegrationTest {
                 "https://expired-evidence.example");
         CommercialOffer expiredEvidence = createOffer(expiredEvidenceProvider, "Expired Evidence Plan",
                 OfferSector.MOBILE_PLAN, "{\"dataGb\":200,\"network5G\":true}", null, null, "FR",
-                LocalDate.now(), LocalDate.now().plusMonths(1), OfferStatus.VERIFIED);
+                today, today.plusMonths(1), OfferStatus.VERIFIED);
         createPricing(expiredEvidence, 999L, OfferBillingPeriod.MONTHLY, 0L, null, null, null);
         OfferEvidence evidence = createEvidence(expiredEvidence,
                 "https://expired-evidence.example/offer", EvidenceStatus.VERIFIED);
