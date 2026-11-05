@@ -6,6 +6,12 @@ const ACCESS_TOKEN_KEY = 'eparly_access_token';
 const REFRESH_TOKEN_KEY = 'eparly_refresh_token';
 const USER_PROFILE_KEY = 'eparly_user_profile';
 
+export interface ProfileSettings {
+  currency?: string;
+  country?: string;
+  timezone?: string;
+}
+
 export interface StoredUserProfile {
   id: string;
   email: string;
@@ -13,6 +19,7 @@ export interface StoredUserProfile {
   status: string;
   emailVerifiedAt?: string | null;
   createdAt?: string;
+  settings?: ProfileSettings | null;
 }
 
 /**

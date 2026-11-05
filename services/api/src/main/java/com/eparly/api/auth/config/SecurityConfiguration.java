@@ -61,8 +61,15 @@ public class SecurityConfiguration {
                             .permitAll();
                     if (openApiPublic && environment.acceptsProfiles(Profiles.of("local", "test"))
                             && !environment.acceptsProfiles(Profiles.of("prod"))) {
-                        authorize.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-                                .permitAll();
+                        authorize.requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/scalar",
+                                "/scalar/**",
+                                "/docs",
+                                "/docs/**"
+                        ).permitAll();
                     }
                     authorize.requestMatchers("/v1/admin/catalog/**").hasAuthority("CATALOG_ADMIN");
                     authorize.requestMatchers("/v1/admin/catalog-sync/**").hasAuthority("CATALOG_ADMIN");

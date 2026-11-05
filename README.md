@@ -103,7 +103,7 @@ Le profil `local` doit être activé explicitement (`.\mvnw.cmd spring-boot:run 
 - L'exécution automatique des migrations Flyway au démarrage.
 - Mailpit pour le SMTP local (`127.0.0.1:1025`, interface `http://127.0.0.1:8025`).
 - Les clés JWT de développement, placées sous `infra/keys/` et exclues de Git.
-- Les endpoints OpenAPI locaux sont disponibles sous `/v3/api-docs` et Swagger UI sous `/swagger-ui.html`.
+- Les endpoints OpenAPI locaux sont disponibles sous `/v3/api-docs`, l'interface interactive Scalar sous `/scalar` (ou `/docs`) et Swagger UI sous `/swagger-ui.html`.
 
 Générer une paire RSA avant le démarrage (format PEM PKCS#8/X.509), depuis la racine du dépôt :
 ```bash
