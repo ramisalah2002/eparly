@@ -44,11 +44,20 @@ describe("sectorProgress", () => {
     const mobile = progress.find((p) => p.sector === "MOBILE_PLAN");
     expect(mobile).toMatchObject({ total: 2, withVerifiedProof: 1, pendingEvidence: 1, percent: 50, state: "in-review" });
     expect(progress.find((p) => p.sector === "STREAMING")).toMatchObject({ total: 1, percent: 0, state: "missing" });
-    expect(progress.find((p) => p.sector === "INTERNET_BOX")).toMatchObject({ total: 0, percent: null, state: "empty" });
+  });
+
+  it("ne renvoie que les secteurs ayant des offres actives, dans l'ordre de l'API", () => {
+    const progress = sectorProgress([
+      offer({ id: "a", sector: "GAS" }),
+      offer({ id: "b", sector: "STREAMING" }),
+      offer({ id: "c", sector: "INSURANCE", publicationStatus: "ARCHIVED" }),
+    ]);
+    expect(progress.map((p) => p.sector)).toEqual(["STREAMING", "GAS"]);
+    expect(sectorProgress([])).toEqual([]);
   });
 
   it("ne compte pas une preuve Tarif comme preuve d'offre", () => {
-    const [mobile] = sectorProgress([offer({ evidence: [adminEvidence({ evidenceScope: "PRICING" })] })]).filter((p) => p.total > 0);
+    const [mobile] = sectorProgress([offer({ evidence: [adminEvidence({ evidenceScope: "PRICING" })] })]);
     expect(mobile.withVerifiedProof).toBe(0);
   });
 });

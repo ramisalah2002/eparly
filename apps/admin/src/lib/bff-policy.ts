@@ -19,6 +19,8 @@ const ALLOWED: AllowedRoute[] = [
   { method: "PATCH", pattern: new RegExp(`^catalog/offers/${UUID}/evidences/${UUID}/verification$`) },
   { method: "POST", pattern: new RegExp(`^catalog/offers/${UUID}/publish$`), publication: true },
   { method: "POST", pattern: new RegExp(`^catalog/offers/${UUID}/archive$`) },
+  { method: "POST", pattern: /^catalog\/providers$/ },
+  { method: "PATCH", pattern: new RegExp(`^catalog/providers/${UUID}$`) },
 ];
 
 export type RouteDecision =

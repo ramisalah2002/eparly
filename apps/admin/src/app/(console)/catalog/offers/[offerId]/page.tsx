@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { ApiProblem } from "@/components/api-problem";
+import { AuditCard } from "@/components/audit-card";
 import {
   Badge,
   Card,
@@ -28,7 +29,7 @@ import {
 import { describePricing } from "@/lib/pricing";
 import { getOffer, getOfferAudit, getOfferEvidences, getOfferPriceHistory } from "@/lib/server/catalog";
 import { publicationEnabled } from "@/lib/server/config";
-import type { AdminEvidence, CatalogAudit, CommercialOffer, OfferPriceHistory } from "@/lib/types";
+import type { AdminEvidence, CommercialOffer, OfferPriceHistory } from "@/lib/types";
 import { EvidenceReview } from "./evidence-review";
 import { OfferActions } from "./offer-actions";
 
@@ -95,7 +96,7 @@ async function OfferContent({ params }: { params: PageProps<"/catalog/offers/[of
           <ConditionsCard offer={offer} />
           <EvidenceCard offer={offer} evidences={evidencesResult.ok ? evidencesResult.data : null} />
           <HistoryCard history={historyResult.ok ? historyResult.data : null} offer={offer} />
-          <AuditCard audit={auditResult.ok ? auditResult.data : null} />
+          <AuditCard title="Journal d'audit de l'offre" audit={auditResult.ok ? auditResult.data : null} />
         </div>
 
         <div className="space-y-6">
@@ -117,10 +118,10 @@ async function OfferContent({ params }: { params: PageProps<"/catalog/offers/[of
           </Card>
 
           <Card title="Droits de réutilisation">
-            <Notice title="Non exposés par l'API actuelle">
-              Le backend (V21) ne fournit pas d&apos;endpoint de droits de réutilisation. Aucun droit n&apos;est considéré
-              comme établi : la décision doit être documentée par une personne habilitée, hors back-office. Une preuve
-              vérifiée ne vaut pas autorisation de réutilisation.
+            <Notice title="Pas encore affichés dans la console">
+              L&apos;API expose désormais les droits de réutilisation, mais la console ne les lit pas encore. Aucun droit
+              n&apos;est considéré comme établi ici : vérifiez-les avant toute publication. Une preuve vérifiée ne vaut pas
+              autorisation de réutilisation.
             </Notice>
           </Card>
 
@@ -332,42 +333,6 @@ function HistoryCard({ history, offer }: { history: OfferPriceHistory[] | null; 
                   {entry.reason && <span className="ml-2 text-muted">{entry.reason}</span>}
                 </span>
                 <span className="text-muted">{formatDateTime(entry.changedAt)}</span>
-              </li>
-            ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-function AuditCard({ audit }: { audit: CatalogAudit[] | null }) {
-  return (
-    <Card title="Journal d'audit de l'offre">
-      {audit === null ? (
-        <p className="text-muted">Journal non disponible.</p>
-      ) : audit.length === 0 ? (
-        <p className="text-muted">Aucun événement.</p>
-      ) : (
-        <ul className="divide-y divide-border">
-          {[...audit]
-            .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-            .map((event) => (
-              <li key={event.id} className="py-2">
-                <div className="flex flex-wrap justify-between gap-2">
-                  <code className="font-mono text-xs font-semibold">{event.action}</code>
-                  <span className="text-muted">{formatDateTime(event.occurredAt)}</span>
-                </div>
-                <p className="mt-0.5 text-xs text-muted">
-                  Acteur : <code className="font-mono">{event.actorUserId ?? "système"}</code>
-                </p>
-                {event.details && (
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-lavender-strong">Détails</summary>
-                    <pre className="mt-1 overflow-x-auto rounded bg-background p-2 font-mono text-xs">
-                      {JSON.stringify(event.details, null, 2)}
-                    </pre>
-                  </details>
-                )}
               </li>
             ))}
         </ul>

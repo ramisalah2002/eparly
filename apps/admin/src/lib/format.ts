@@ -45,9 +45,21 @@ export function formatDateTime(value: string | null | undefined): string {
 }
 
 export const SECTOR_LABELS: Record<Sector, string> = {
-  STREAMING: "Streaming",
+  STREAMING: "Streaming vidéo",
   MOBILE_PLAN: "Forfait mobile",
   INTERNET_BOX: "Box internet",
+  MUSIC_STREAMING: "Streaming musical",
+  CLOUD_STORAGE: "Stockage cloud",
+  SOFTWARE_SAAS: "Logiciel / SaaS",
+  GAMING: "Jeux vidéo",
+  ELECTRICITY: "Électricité",
+  GAS: "Gaz",
+  INSURANCE: "Assurance",
+  BANKING: "Banque",
+  SPORT_FITNESS: "Sport & fitness",
+  PRESS: "Presse",
+  TRANSPORT: "Transport",
+  OTHER_RECURRING: "Autre abonnement",
 };
 
 export const OFFER_STATUS_LABELS: Record<OfferStatus, string> = {
@@ -105,6 +117,15 @@ const BACKEND_MESSAGES: Record<string, string> = {
   "The resource changed; reload it and retry":
     "La ressource a été modifiée entre-temps. Rechargez la page puis recommencez.",
   "Request validation failed": "Requête invalide : vérifiez les champs saisis.",
+  "Provider already exists or sector is invalid": "Un fournisseur portant ce nom existe déjà dans ce secteur.",
+  "Provider already exists for this sector": "Un fournisseur portant ce nom existe déjà dans ce secteur.",
+  "Provider sector cannot change while offers exist":
+    "Le secteur ne peut pas changer tant que des offres sont rattachées à ce fournisseur.",
+  "Provider has changed; reload it":
+    "Le fournisseur a été modifié entre-temps. Rechargez la page avant de recommencer.",
+  "Official website must be a valid HTTPS URL": "Le site officiel doit être une URL HTTPS valide.",
+  "Provider name cannot be blank": "Le nom du fournisseur est obligatoire.",
+  "Provider not found": "Fournisseur introuvable.",
 };
 
 export function describeApiError(status: number, message: string | null | undefined): string {

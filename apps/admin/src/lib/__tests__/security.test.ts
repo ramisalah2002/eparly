@@ -15,10 +15,18 @@ describe("resolveAdminRoute", () => {
     });
     expect(resolveAdminRoute("POST", ["catalog", "offers", OFFER, "publish"])).toMatchObject({ allowed: true, publication: true });
     expect(resolveAdminRoute("POST", ["catalog", "offers", OFFER, "archive"])).toMatchObject({ allowed: true, publication: false });
+    expect(resolveAdminRoute("POST", ["catalog", "providers"])).toEqual({
+      allowed: true,
+      backendPath: "/v1/admin/catalog/providers",
+      publication: false,
+    });
+    expect(resolveAdminRoute("PATCH", ["catalog", "providers", OFFER])).toMatchObject({ allowed: true, publication: false });
   });
 
   it("refuse les routes hors liste, les mauvaises méthodes et la traversée de chemin", () => {
-    expect(resolveAdminRoute("POST", ["catalog", "providers"])).toEqual({ allowed: false, status: 404 });
+    expect(resolveAdminRoute("POST", ["catalog", "offers"])).toEqual({ allowed: false, status: 404 });
+    expect(resolveAdminRoute("PUT", ["catalog", "providers", OFFER])).toEqual({ allowed: false, status: 405 });
+    expect(resolveAdminRoute("PATCH", ["catalog", "providers", "not-a-uuid"])).toEqual({ allowed: false, status: 404 });
     expect(resolveAdminRoute("PUT", ["catalog", "offers", OFFER, "publish"])).toEqual({ allowed: false, status: 405 });
     expect(resolveAdminRoute("POST", ["catalog", "offers", "..", "publish"])).toEqual({ allowed: false, status: 404 });
     expect(resolveAdminRoute("POST", ["catalog", "offers", "not-a-uuid", "publish"])).toEqual({ allowed: false, status: 404 });

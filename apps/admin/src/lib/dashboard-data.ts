@@ -56,7 +56,7 @@ export function monthlyActivity(offers: CommercialOffer[], now: Date, months = 6
   return buckets;
 }
 
-export type SectorState = "empty" | "complete" | "in-review" | "missing";
+export type SectorState = "complete" | "in-review" | "missing";
 
 export interface SectorProgress {
   sector: Sector;
@@ -64,14 +64,18 @@ export interface SectorProgress {
   /** Offres disposant d'au moins une preuve « Offre » vérifiée. */
   withVerifiedProof: number;
   pendingEvidence: number;
-  /** Part entière 0–100, ou null s'il n'y a aucune offre. */
-  percent: number | null;
+  /** Part entière 0–100. */
+  percent: number;
   state: SectorState;
 }
 
-/** Avancement de la vérification humaine, par secteur (hors offres archivées). */
+/**
+ * Avancement de la vérification humaine, par secteur (hors offres archivées).
+ * Seuls les secteurs ayant au moins une offre sont renvoyés, dans l'ordre de l'API.
+ */
 export function sectorProgress(offers: CommercialOffer[]): SectorProgress[] {
-  return SECTORS.map((sector) => {
+  const present = new Set(offers.filter((o) => o.publicationStatus !== "ARCHIVED").map((o) => o.sector));
+  return SECTORS.filter((sector) => present.has(sector)).map((sector) => {
     const inSector = offers.filter((o) => o.sector === sector && o.publicationStatus !== "ARCHIVED");
     const withVerifiedProof = inSector.filter((o) =>
       (o.evidence ?? []).some((e) => e.evidenceScope === "OFFER" && e.verificationStatus === "VERIFIED"),
@@ -81,9 +85,9 @@ export function sectorProgress(offers: CommercialOffer[]): SectorProgress[] {
       0,
     );
     const total = inSector.length;
-    const percent = total === 0 ? null : Math.floor((withVerifiedProof / total) * 100);
+    const percent = Math.floor((withVerifiedProof / total) * 100);
     const state: SectorState =
-      total === 0 ? "empty" : withVerifiedProof === total ? "complete" : pendingEvidence > 0 ? "in-review" : "missing";
+      withVerifiedProof === total ? "complete" : pendingEvidence > 0 ? "in-review" : "missing";
     return { sector, total, withVerifiedProof, pendingEvidence, percent, state };
   });
 }

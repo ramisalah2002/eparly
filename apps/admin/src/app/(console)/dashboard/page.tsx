@@ -30,7 +30,6 @@ const SECTOR_STATE: Record<SectorState, { label: string; tone: "ok" | "warn" | "
   complete: { label: "À jour", tone: "ok" },
   "in-review": { label: "Revue en cours", tone: "warn" },
   missing: { label: "Preuves manquantes", tone: "danger" },
-  empty: { label: "Aucune offre", tone: "neutral" },
 };
 
 const timeFormatter = new Intl.DateTimeFormat("fr-FR", { timeStyle: "short", timeZone: "Europe/Paris" });
@@ -127,7 +126,7 @@ async function DashboardContent() {
             </div>
             {published === 0 && totalElements > 0 && (
               <p className="mt-4 text-xs text-muted">
-                Aucune offre publiée. Droits de réutilisation : non exposés par l&apos;API, à documenter hors back-office.
+                Aucune offre publiée. Droits de réutilisation : pas encore affichés dans la console.
               </p>
             )}
           </Card>
@@ -144,16 +143,13 @@ async function DashboardContent() {
         <div className="grid items-start gap-6 xl:grid-cols-[2fr_3fr]">
           <div className="space-y-6">
           <Card title="Vérification par secteur" icon={<ShieldCheck className="size-4" />}>
+            {sectors.length === 0 && <p className="text-muted">Aucune offre active au catalogue.</p>}
             <ul className="divide-y divide-border">
               {sectors.map((s) => (
                 <li key={s.sector} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
                   <ProgressRing
                     percent={s.percent}
-                    label={
-                      s.percent === null
-                        ? `${SECTOR_LABELS[s.sector]} : aucune offre`
-                        : `${SECTOR_LABELS[s.sector]} : ${s.percent} % des offres ont une preuve vérifiée`
-                    }
+                    label={`${SECTOR_LABELS[s.sector]} : ${s.percent} % des offres ont une preuve vérifiée`}
                   />
                   <div className="min-w-0 flex-1">
                     <TextLink href={`/catalog/offers?sector=${s.sector}`}>{SECTOR_LABELS[s.sector]}</TextLink>

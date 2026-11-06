@@ -121,12 +121,13 @@ export function publicationChecklist(
     });
   }
 
-  // Le contrat V21 n'expose pas de droits de réutilisation : l'état ne peut pas être affirmé.
+  // Les droits de réutilisation (GET /offers/{id}/reuse-rights) ne sont pas encore lus par la console :
+  // l'état ne peut pas être affirmé.
   items.push({
     id: "reuse-rights",
     label: "Droits de réutilisation établis",
     state: "unknown",
-    detail: "Non exposé par l'API actuelle : décision à documenter hors back-office.",
+    detail: "Pas encore lu par la console : à vérifier avant publication.",
   });
 
   return items;

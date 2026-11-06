@@ -59,6 +59,10 @@ pnpm --filter admin build
 | `/catalog/offers` | Table paginée côté serveur, filtres statut / secteur / fournisseur / « avec blocage », URL partageables |
 | `/catalog/offers/[offerId]` | Synthèse, tarification, conditions, caractéristiques, preuves et décision, historique des prix, audit, checklist, publication / archivage |
 | `/catalog/reviews` | File des preuves `PENDING`, priorisée, avec points d'attention |
+| `/catalog/providers` | Liste paginée des fournisseurs, actifs ou non |
+| `/catalog/providers/new` | Création (nom unique par secteur, site HTTPS, pays ISO) |
+| `/catalog/providers/[providerId]` | Fiche, offres rattachées, audit, désactivation / réactivation |
+| `/catalog/providers/[providerId]/edit` | Modification des seuls champs changés, avec version attendue ; secteur verrouillé si des offres existent |
 
 ## Endpoints consommés
 
@@ -68,17 +72,21 @@ pnpm --filter admin build
 | GET | `/v1/me` | Identité affichée |
 | GET | `/v1/admin/catalog/offers` | Liste, dashboard, file de revue |
 | GET | `/v1/admin/catalog/offers/{id}` (+ `/evidences`, `/price-history`, `/audit`) | Fiche offre |
-| GET | `/v1/admin/catalog/providers` | Filtre, total, sonde de permission |
+| GET | `/v1/admin/catalog/providers` | Liste, filtre, total, sonde de permission |
+| GET | `/v1/admin/catalog/providers/{id}` (+ `/audit`) | Fiche fournisseur |
+| POST | `/v1/admin/catalog/providers` | Création d'un fournisseur |
+| PATCH | `/v1/admin/catalog/providers/{id}` | Modification, désactivation (rend « Périmées » ses offres publiées) |
 | GET | `/v1/admin/catalog-sync/runs` | Encart du batch |
 | PATCH | `/v1/admin/catalog/offers/{id}/evidences/{evidenceId}/verification` | Décision sur une preuve |
 | POST | `/v1/admin/catalog/offers/{id}/publish`, `/archive` | Publication / archivage |
 
 ## Contrats backend manquants
 
-Constatés sur le contrat OpenAPI actuel (migration V21). À demander au responsable API :
+Constatés sur le contrat OpenAPI actuel (migration V30). À demander au responsable API :
 
 1. **Droits de réutilisation** : `GET/PATCH /v1/admin/catalog/offers/{id}/reuse-rights`
-   (cités par le cahier des charges, absents du dépôt). L'écran affiche « non exposés ».
+   existent désormais côté API mais ne sont pas encore branchés dans la console ;
+   la checklist les affiche toujours « à confirmer ».
 2. **Blocages de publication structurés** : `publish` ne renvoie que le premier motif ; une
    liste complète remplacerait la checklist indicative.
 3. **Agrégats catalogue** et **file de revue globale** : aujourd'hui calculés en parcourant
@@ -87,5 +95,5 @@ Constatés sur le contrat OpenAPI actuel (migration V21). À demander au respons
 5. **État du scheduler** (prochaine échéance, actif ou non) : non exposé.
 6. **Utilisateurs** (lot P2) : aucun endpoint admin.
 
-Écart à signaler : le cahier des charges décrit un état V28 (secteurs banque, électricité,
-SaaS ; 83 offres) qui n'existe sur aucune branche du dépôt.
+Les 15 secteurs de l'API (V30) sont pris en charge ; le tableau de bord n'affiche que ceux
+qui ont au moins une offre active.

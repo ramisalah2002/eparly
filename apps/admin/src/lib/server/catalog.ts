@@ -82,6 +82,20 @@ export function listProviders(page = 0, size = MAX_PAGE_SIZE): Promise<BackendRe
   return callBackend(`${ADMIN}/providers?page=${page}&size=${Math.min(size, MAX_PAGE_SIZE)}`);
 }
 
+export function getProvider(providerId: string): Promise<BackendResult<OfferProvider>> {
+  return callBackend(`${ADMIN}/providers/${encodeURIComponent(providerId)}`);
+}
+
+export function getProviderAudit(providerId: string): Promise<BackendResult<CatalogAudit[]>> {
+  return callBackend(`${ADMIN}/providers/${encodeURIComponent(providerId)}/audit`);
+}
+
+/** Nombre d'offres d'un fournisseur, éventuellement limité à un statut (lecture de totalElements). */
+export async function countProviderOffers(providerId: string, status?: OfferStatus): Promise<BackendResult<number>> {
+  const result = await listOffers({ providerId, status, size: 1 });
+  return result.ok ? { ok: true, status: 200, data: result.data.totalElements } : result;
+}
+
 export function listSyncRuns(limit = 5): Promise<BackendResult<CatalogSyncReport[]>> {
   return callBackend(`/v1/admin/catalog-sync/runs?limit=${limit}`);
 }

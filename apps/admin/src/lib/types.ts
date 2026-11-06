@@ -1,8 +1,28 @@
-// Contrats Spring Boot repris de /v3/api-docs (services/api, migration V21).
+// Contrats Spring Boot repris de /v3/api-docs (services/api, migration V30).
 // Ne pas élargir les énumérations côté front : seules ces valeurs existent dans l'API.
 
-export type Sector = "STREAMING" | "MOBILE_PLAN" | "INTERNET_BOX";
-export const SECTORS: Sector[] = ["STREAMING", "MOBILE_PLAN", "INTERNET_BOX"];
+export const SECTORS = [
+  "STREAMING",
+  "MOBILE_PLAN",
+  "INTERNET_BOX",
+  "MUSIC_STREAMING",
+  "CLOUD_STORAGE",
+  "SOFTWARE_SAAS",
+  "GAMING",
+  "ELECTRICITY",
+  "GAS",
+  "INSURANCE",
+  "BANKING",
+  "SPORT_FITNESS",
+  "PRESS",
+  "TRANSPORT",
+  "OTHER_RECURRING",
+] as const;
+export type Sector = (typeof SECTORS)[number];
+
+export function isSector(value: unknown): value is Sector {
+  return typeof value === "string" && (SECTORS as readonly string[]).includes(value);
+}
 
 export type OfferStatus = "DRAFT" | "VERIFIED" | "STALE" | "EXPIRED" | "ARCHIVED";
 export const OFFER_STATUSES: OfferStatus[] = ["DRAFT", "VERIFIED", "STALE", "EXPIRED", "ARCHIVED"];

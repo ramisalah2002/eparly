@@ -7,7 +7,7 @@ import { blockingCount, publicationChecklist } from "@/lib/checklist";
 import { formatDateTime, OFFER_STATUS_LABELS, SECTOR_LABELS } from "@/lib/format";
 import { shortPrice } from "@/lib/pricing";
 import { listAllOffers, listOffers, listProviders } from "@/lib/server/catalog";
-import { OFFER_STATUSES, SECTORS, type CommercialOffer, type OfferStatus, type Sector } from "@/lib/types";
+import { isSector, OFFER_STATUSES, SECTORS, type CommercialOffer, type OfferStatus, type Sector } from "@/lib/types";
 
 export const metadata = { title: "Offres — Eparly Admin" };
 
@@ -34,7 +34,7 @@ function parseFilters(params: Record<string, string | string[] | undefined>): Fi
   const page = Number.parseInt(first(params.page) ?? "0", 10);
   return {
     status: OFFER_STATUSES.includes(status as OfferStatus) ? (status as OfferStatus) : undefined,
-    sector: SECTORS.includes(sector as Sector) ? (sector as Sector) : undefined,
+    sector: isSector(sector) ? sector : undefined,
     providerId: providerId && UUID_RE.test(providerId) ? providerId : undefined,
     blocked: first(params.blocked) === "1",
     page: Number.isFinite(page) && page >= 0 ? page : 0,

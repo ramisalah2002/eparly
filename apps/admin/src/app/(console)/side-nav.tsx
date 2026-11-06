@@ -31,7 +31,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/catalog/offers", label: "Offres", icon: Tags },
       { href: "/catalog/reviews", label: "Revue des preuves", icon: ClipboardCheck },
-      { href: "/catalog/providers", label: "Fournisseurs", icon: Building2, planned: "P1" },
+      { href: "/catalog/providers", label: "Fournisseurs", icon: Building2 },
     ],
   },
   {
