@@ -101,7 +101,7 @@ jobs:
       - name: Ensure Maven Wrapper is executable
         run: chmod +x ./mvnw
 
-      - name: Verify and test (with Testcontainers & Flyway)
+      - name: Verify and test (with Testcontainers & Liquibase)
         run: ./mvnw -B -ntp verify
 
       - name: Upload Test Reports on failure

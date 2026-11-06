@@ -1211,10 +1211,10 @@ class SavingsVerificationIntegrationTest {
         }
 
         @Test
-        @DisplayName("Flyway a bien enregistré la migration V14 comme réussie")
-        void flywayRecordsV14AsSuccessful() {
+        @DisplayName("Liquibase a bien enregistré la migration V14 comme exécutée")
+        void liquibaseRecordsV14AsExecuted() {
             Integer v14Count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '14' AND success = true",
+                    "SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V14' AND exectype = 'EXECUTED'",
                     Integer.class);
             assertThat(v14Count).isEqualTo(1);
         }
@@ -1406,7 +1406,7 @@ class SavingsVerificationIntegrationTest {
             UUID actionId = createDeclaredAction(owner, sub, offer);
 
             Integer migrationApplied = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '15' AND success = true",
+                    "SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V15' AND exectype = 'EXECUTED'",
                     Integer.class);
             assertThat(migrationApplied).isEqualTo(1);
 

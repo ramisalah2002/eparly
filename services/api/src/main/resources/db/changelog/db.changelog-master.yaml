@@ -1,0 +1,386 @@
+# Changelog maître Liquibase.
+#
+# Les scripts V1 à V21 sont les anciennes migrations Flyway, reprises sans modification.
+# Une base déjà migrée par Flyway n'est pas rejouée : chaque changeset est marqué « MARK_RAN »
+# si sa version figure comme réussie dans flyway_schema_history.
+#
+# Règle : ne jamais modifier un changeset déjà appliqué ; ajouter un nouveau fichier à la suite.
+databaseChangeLog:
+  - changeSet:
+      id: V1__init_schema
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success
+      changes:
+        - sqlFile:
+            path: sql/V1__init_schema.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V2__users_settings_consents
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '2' AND success
+      changes:
+        - sqlFile:
+            path: sql/V2__users_settings_consents.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V3__email_verification_tokens
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '3' AND success
+      changes:
+        - sqlFile:
+            path: sql/V3__email_verification_tokens.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V4__refresh_token_sessions
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '4' AND success
+      changes:
+        - sqlFile:
+            path: sql/V4__refresh_token_sessions.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V5__password_reset_and_jwt_invalidation
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '5' AND success
+      changes:
+        - sqlFile:
+            path: sql/V5__password_reset_and_jwt_invalidation.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V6__rate_limiting
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '6' AND success
+      changes:
+        - sqlFile:
+            path: sql/V6__rate_limiting.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V7__financial_core_schema
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '7' AND success
+      changes:
+        - sqlFile:
+            path: sql/V7__financial_core_schema.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V8__import_integrity
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '8' AND success
+      changes:
+        - sqlFile:
+            path: sql/V8__import_integrity.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V9__system_categories
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '9' AND success
+      changes:
+        - sqlFile:
+            path: sql/V9__system_categories.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V10__recurring_series
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '10' AND success
+      changes:
+        - sqlFile:
+            path: sql/V10__recurring_series.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V11__subscriptions
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '11' AND success
+      changes:
+        - sqlFile:
+            path: sql/V11__subscriptions.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V12__offer_catalog
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '12' AND success
+      changes:
+        - sqlFile:
+            path: sql/V12__offer_catalog.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V13__savings_actions
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '13' AND success
+      changes:
+        - sqlFile:
+            path: sql/V13__savings_actions.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V14__savings_verification
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '14' AND success
+      changes:
+        - sqlFile:
+            path: sql/V14__savings_verification.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V15__savings_verification_integrity
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '15' AND success
+      changes:
+        - sqlFile:
+            path: sql/V15__savings_verification_integrity.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V16__add_full_name_to_users
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '16' AND success
+      changes:
+        - sqlFile:
+            path: sql/V16__add_full_name_to_users.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V17__offer_evidence_verification_is_optional
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '17' AND success
+      changes:
+        - sqlFile:
+            path: sql/V17__offer_evidence_verification_is_optional.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V18__canonical_offer_pricing
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '18' AND success
+      changes:
+        - sqlFile:
+            path: sql/V18__canonical_offer_pricing.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V19__catalog_admin_permissions_and_audit
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '19' AND success
+      changes:
+        - sqlFile:
+            path: sql/V19__catalog_admin_permissions_and_audit.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V20__catalog_sync_observations
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '20' AND success
+      changes:
+        - sqlFile:
+            path: sql/V20__catalog_sync_observations.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false
+  - changeSet:
+      id: V21__add_csv_feed_source_type
+      author: eparly
+      preConditions:
+        - onFail: MARK_RAN
+        - or:
+            - not:
+                - tableExists:
+                    tableName: flyway_schema_history
+            - sqlCheck:
+                expectedResult: 0
+                sql: SELECT COUNT(*) FROM flyway_schema_history WHERE version = '21' AND success
+      changes:
+        - sqlFile:
+            path: sql/V21__add_csv_feed_source_type.sql
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false

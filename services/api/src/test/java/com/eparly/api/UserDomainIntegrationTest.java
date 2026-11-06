@@ -186,11 +186,11 @@ class UserDomainIntegrationTest {
     @DisplayName("7 & 8. Vérification que V1 et V2 sont appliquées et validées par Hibernate")
     void shouldVerifyMigrationsAndHistory() {
         Integer v1Count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = true",
+                "SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V1' AND exectype = 'EXECUTED'",
                 Integer.class
         );
         Integer v2Count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '2' AND success = true",
+                "SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V2' AND exectype = 'EXECUTED'",
                 Integer.class
         );
 

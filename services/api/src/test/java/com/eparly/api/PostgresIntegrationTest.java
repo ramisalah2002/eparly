@@ -64,40 +64,40 @@ class PostgresIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("Should have executed Flyway V1 to V8 migrations in flyway_schema_history")
-	void shouldHaveFlywayHistory() {
+	@DisplayName("Should have executed V1 to V8 changesets in databasechangelog")
+	void shouldHaveMigrationHistory() {
 		Integer migrationCount = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = true",
+				"SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V1' AND exectype = 'EXECUTED'",
 				Integer.class
 		);
 		assertThat(migrationCount).isNotNull().isEqualTo(1);
 		Integer v3Count = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '3' AND success = true",
+				"SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V3' AND exectype = 'EXECUTED'",
 				Integer.class
 		);
 		assertThat(v3Count).isNotNull().isEqualTo(1);
 		Integer v4Count = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '4' AND success = true",
+				"SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V4' AND exectype = 'EXECUTED'",
 				Integer.class
 		);
 		assertThat(v4Count).isNotNull().isEqualTo(1);
 		Integer v5Count = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '5' AND success = true",
+				"SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V5' AND exectype = 'EXECUTED'",
 				Integer.class
 		);
 		assertThat(v5Count).isNotNull().isEqualTo(1);
 		Integer v6Count = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '6' AND success = true",
+				"SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V6' AND exectype = 'EXECUTED'",
 				Integer.class
 		);
 		assertThat(v6Count).isNotNull().isEqualTo(1);
 		Integer v7Count = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '7' AND success = true",
+				"SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V7' AND exectype = 'EXECUTED'",
 				Integer.class
 		);
 		assertThat(v7Count).isNotNull().isEqualTo(1);
 		Integer v8Count = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM flyway_schema_history WHERE version = '8' AND success = true",
+				"SELECT COUNT(*) FROM databasechangelog WHERE split_part(id, '__', 1) = 'V8' AND exectype = 'EXECUTED'",
 				Integer.class
 		);
 		assertThat(v8Count).isNotNull().isEqualTo(1);
@@ -107,10 +107,10 @@ class PostgresIntegrationTest {
 	@DisplayName("V20 adds source-controlled catalog observations and preserves prior schema")
 	void shouldApplyCatalogSyncV20() {
 		String latestVersion = jdbcTemplate.queryForObject(
-				"SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
+				"SELECT split_part(id, '__', 1) FROM databasechangelog ORDER BY orderexecuted DESC LIMIT 1",
 				String.class
 		);
-		assertThat(latestVersion).isEqualTo("21");
+		assertThat(latestVersion).isEqualTo("V21");
 
 		Integer promotionPricingColumns = jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
@@ -246,7 +246,7 @@ class PostgresIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("Should verify pgcrypto extension is installed by Flyway")
+	@DisplayName("Should verify pgcrypto extension is installed by the migrations")
 	void shouldVerifyPgcryptoExtension() {
 		Integer extensionCount = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM pg_extension WHERE extname = 'pgcrypto'",
