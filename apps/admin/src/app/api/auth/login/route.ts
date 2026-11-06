@@ -1,82 +1,47 @@
-import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { serverApiRequest, sessionCookieOptions } from "@/lib/server-api";
-import { SESSION_COOKIE, REFRESH_COOKIE, SESSION_BINDING_COOKIE } from "@/lib/api";
-import { generateCsrfToken } from "@/lib/csrf";
+import { cookies } from "next/headers";
+import { NextResponse, type NextRequest } from "next/server";
+import { describeApiError } from "@/lib/format";
+import { callBackend } from "@/lib/server/backend";
+import { hasCatalogAdminPermission } from "@/lib/server/catalog";
+import { isProduction } from "@/lib/server/config";
+import { bffError as error, readJsonBody, rejectUnsafeMutation } from "@/lib/server/request-guard";
+import { ACCESS_COOKIE, REFRESH_COOKIE, sessionCookieOptions } from "@/lib/session-cookies";
+import type { TokenResponse } from "@/lib/types";
 
-/**
- * POST /api/auth/login
- * Proxy de connexion vers Spring Boot.
- * Les tokens sont stockés dans des cookies HttpOnly, jamais exposés au JavaScript.
- * La durÉe des cookies est alignÉe sur le véritable TTL des jetons retournés par Spring Boot.
- * Le jeton CSRF est signé pour un identifiant de session opaque et HttpOnly.
- */
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+export async function POST(request: NextRequest) {
+  const rejected = rejectUnsafeMutation(request);
+  if (rejected) return rejected;
 
-    const springResponse = await serverApiRequest("/v1/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!springResponse.ok) {
-      return NextResponse.json(
-        { error: "Identifiants invalides" },
-        { status: springResponse.status },
-      );
-    }
-
-    const data = await springResponse.json();
-    const accessToken = data.accessToken as string | undefined;
-    const refreshToken = data.refreshToken as string | undefined;
-    const expiresIn = data.expiresIn as number | undefined;
-    const refreshExpiresIn = data.refreshExpiresIn as number | undefined;
-
-    if (!accessToken || !refreshToken) {
-      return NextResponse.json(
-        { error: "Réponse d'authentification incomplâte" },
-        { status: 502 },
-      );
-    }
-
-    const response = NextResponse.json(
-      { success: true, message: "Connexion réussie" },
-      { status: 200 },
-    );
-
-    // Cookie session (access token) - HttpOnly, Secure, SameSite=Strict
-    // DurÉe alignÉe sur le TTL rÉel du JWT (15 min par dÉfaut)
-    response.cookies.set(SESSION_COOKIE, accessToken, {
-      ...sessionCookieOptions(expiresIn),
-    });
-
-    // Cookie refresh - HttpOnly, Secure, SameSite=Strict
-    response.cookies.set(REFRESH_COOKIE, refreshToken, {
-      ...sessionCookieOptions(refreshExpiresIn),
-    });
-
-    // Jeton CSRF signé cÃīté serveur, non liÉ Ã la valeur du JWT.
-    // Non HttpOnly pour âtre lisible cÃīté client (en-tâe X-CSRF-TOKEN)
-    const sessionBinding = randomBytes(32).toString("base64url");
-    const csrfToken = generateCsrfToken(sessionBinding);
-    response.cookies.set(SESSION_BINDING_COOKIE, sessionBinding, {
-      ...sessionCookieOptions(refreshExpiresIn),
-    });
-    response.cookies.set("eparly_csrf", csrfToken, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: expiresIn ?? 60 * 15,
-    });
-
-    return response;
-  } catch {
-    return NextResponse.json(
-      { error: "Erreur interne lors de l'authentification" },
-      { status: 500 },
-    );
+  const body = await readJsonBody(request, 2_048);
+  const email = typeof (body as { email?: unknown })?.email === "string" ? (body as { email: string }).email.trim() : "";
+  const password = typeof (body as { password?: unknown })?.password === "string" ? (body as { password: string }).password : "";
+  if (!email || !password || email.length > 320 || password.length > 128) {
+    return error(400, "Email et mot de passe requis.");
   }
+
+  const login = await callBackend<TokenResponse>("/v1/auth/login", {
+    method: "POST",
+    body: { email, password },
+    accessToken: "",
+  });
+  if (!login.ok) {
+    if (login.status === 401) return error(401, "Identifiants invalides ou compte non vérifié.");
+    return error(login.status || 502, describeApiError(login.status, login.error?.message));
+  }
+
+  const tokens = login.data;
+  const permission = await hasCatalogAdminPermission(tokens.accessToken);
+  if (!permission.ok) {
+    // Compte valide mais non administrateur : on révoque aussitôt la session ouverte.
+    await callBackend("/v1/auth/logout", { method: "POST", body: { refreshToken: tokens.refreshToken }, accessToken: "" });
+    if (permission.status === 403) {
+      return error(403, "Ce compte ne dispose pas de la permission CATALOG_ADMIN.");
+    }
+    return error(permission.status || 502, describeApiError(permission.status, permission.error?.message));
+  }
+
+  const store = await cookies();
+  store.set(ACCESS_COOKIE, tokens.accessToken, sessionCookieOptions(isProduction, tokens.expiresIn));
+  store.set(REFRESH_COOKIE, tokens.refreshToken, sessionCookieOptions(isProduction, tokens.refreshExpiresIn));
+  return NextResponse.json({ ok: true });
 }

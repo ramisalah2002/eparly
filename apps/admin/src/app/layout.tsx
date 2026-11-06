@@ -1,20 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Spline_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Même police que l'application mobile (apps/mobile/src/global.css, --font-display).
+const splineSans = Spline_Sans({
+  variable: "--font-spline",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
   title: "Eparly Admin",
-  description: "Eparly Admin Dashboard",
+  description: "Console d'administration du catalogue Eparly",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({
@@ -23,11 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="fr" className={`${splineSans.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col font-sans text-sm">{children}</body>
     </html>
   );
 }
