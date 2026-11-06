@@ -5,6 +5,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -103,7 +105,58 @@ public class JsonCatalogOfferExtractor {
                 text(item, "eligibility"),
                 characteristics,
                 conditions,
-                sector);
+                itemSector(item, sector),
+                structured(item));
+    }
+
+    /** Une source multi-categories peut preciser le secteur offre par offre ; une valeur inconnue est ignoree. */
+    private static OfferSector itemSector(JsonNode item, OfferSector sector) {
+        String value = text(item, "sector");
+        if (value == null) return sector;
+        try {
+            return OfferSector.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return sector;
+        }
+    }
+
+    /** Champs facultatifs d'un flux officiel. Rien n'est deduit lorsqu'ils sont absents. */
+    private static StructuredOfferData structured(JsonNode item) {
+        String provider = text(item, "providerName");
+        Long promotionPrice = minorAmount(text(item, "promotionPrice"));
+        LocalDate promotionUntil = isoDate(text(item, "promotionValidUntil"));
+        Integer promotionMonths = integer(item, "promotionDurationMonths");
+        Integer commitmentMonths = integer(item, "commitmentMonths");
+        Long activationFee = minorAmount(text(item, "activationFee"));
+        if (provider == null && promotionPrice == null && promotionUntil == null && promotionMonths == null
+                && commitmentMonths == null && activationFee == null) {
+            return null;
+        }
+        return new StructuredOfferData(provider, text(item, "country"), null, promotionPrice, promotionUntil,
+                promotionMonths, commitmentMonths, activationFee, null, null, Map.of(), null, null, null);
+    }
+
+    private static Long minorAmount(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return new BigDecimal(value.trim().replace(',', '.')).movePointRight(2).longValueExact();
+        } catch (ArithmeticException | NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static LocalDate isoDate(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (java.time.format.DateTimeParseException exception) {
+            return null;
+        }
+    }
+
+    private static Integer integer(JsonNode item, String field) {
+        JsonNode value = item.get(field);
+        return value != null && value.isIntegralNumber() && value.canConvertToInt() ? value.intValue() : null;
     }
 
     private static Object scalar(JsonNode node) {

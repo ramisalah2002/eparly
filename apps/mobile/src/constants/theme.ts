@@ -28,25 +28,22 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
+    /** Space Grotesk - Distinctive Geometric Sans */
+    sans: 'SpaceGrotesk-Regular',
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
+    rounded: 'SpaceGrotesk-Medium',
     mono: 'ui-monospace',
   },
   default: {
-    sans: 'normal',
+    sans: 'SpaceGrotesk-Regular',
     serif: 'serif',
-    rounded: 'normal',
+    rounded: 'SpaceGrotesk-Medium',
     mono: 'monospace',
   },
   web: {
-    sans: 'var(--font-display)',
+    sans: 'SpaceGrotesk-Regular, system-ui, sans-serif',
     serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
+    rounded: 'SpaceGrotesk-Medium, system-ui, sans-serif',
     mono: 'var(--font-mono)',
   },
 });
@@ -61,5 +58,5 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+export const BottomTabInset = Platform.select({ ios: 84, android: 88 }) ?? 84;
 export const MaxContentWidth = 800;

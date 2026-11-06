@@ -47,6 +47,8 @@ public class SecurityConfiguration {
                     authorize.requestMatchers(HttpMethod.POST,
                                     "/v1/auth/register",
                                     "/v1/auth/login",
+                                    "/v1/auth/google",
+                                    "/v1/auth/google/challenge",
                                     "/v1/auth/refresh",
                                     "/v1/auth/logout",
                                     "/v1/auth/verify-email",
@@ -59,8 +61,15 @@ public class SecurityConfiguration {
                             .permitAll();
                     if (openApiPublic && environment.acceptsProfiles(Profiles.of("local", "test"))
                             && !environment.acceptsProfiles(Profiles.of("prod"))) {
-                        authorize.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-                                .permitAll();
+                        authorize.requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/scalar",
+                                "/scalar/**",
+                                "/docs",
+                                "/docs/**"
+                        ).permitAll();
                     }
                     authorize.requestMatchers("/v1/admin/catalog/**").hasAuthority("CATALOG_ADMIN");
                     authorize.requestMatchers("/v1/admin/catalog-sync/**").hasAuthority("CATALOG_ADMIN");

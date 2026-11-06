@@ -12,7 +12,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AwinTelcoCsvExtractorTest {
     private final AwinTelcoCsvExtractor extractor = new AwinTelcoCsvExtractor(new ObjectMapper());
     private final OfferNormalizationService normalization =
-            new OfferNormalizationService(new PriceNormalizationService());
+            new OfferNormalizationService(new PriceNormalizationService(),
+            new com.eparly.api.catalogsync.normalization.CatalogCategorySpecs(),
+            new com.eparly.api.catalogsync.CatalogSyncProperties(), java.time.Clock.systemUTC());
 
     @Test
     void extractsDocumentedAwinTelcoFieldsWithoutTreatingPromotionsAsVerifiedPrices() {

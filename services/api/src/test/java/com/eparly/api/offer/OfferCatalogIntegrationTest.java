@@ -40,6 +40,7 @@ import org.hamcrest.Matchers;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -73,6 +74,19 @@ class OfferCatalogIntegrationTest {
     @Autowired private OfferEvidenceRepository evidenceRepository;
     @Autowired private OfferPriceHistoryRepository priceHistoryRepository;
     @Autowired private OfferCatalogProperties properties;
+
+    private void makePublishable(CommercialOffer offer) {
+        CommercialOffer current = offerRepository.findById(offer.getId()).orElseThrow();
+        current.setReuseRightsStatus(com.eparly.api.offer.domain.OfferReuseRights.ESTABLISHED);
+        if (current.getCommitment() == null) current.setCommitment("Sans engagement");
+        offerRepository.saveAndFlush(current);
+        pricingRepository.findByOfferId(offer.getId()).ifPresent(pricing -> {
+            if (pricing.getActivationFeeMinor() == null) {
+                pricing.setActivationFeeMinor(0L);
+                pricingRepository.saveAndFlush(pricing);
+            }
+        });
+    }
 
     private User activeUser() {
         User user = new User("offer-" + UUID.randomUUID() + "@eparly.test", "DummyPasswordHash2026!");
@@ -193,6 +207,7 @@ class OfferCatalogIntegrationTest {
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(offer, "https://example-stream.com/offers/start");
 
+        makePublishable(offer);
         CommercialOfferResponse r = service.validateAndPublish(offer.getId());
         assertThat(r.publicationStatus()).isEqualTo(OfferStatus.VERIFIED);
         assertThat(r.pricing().amountMinor()).isEqualTo(999L);
@@ -208,6 +223,7 @@ class OfferCatalogIntegrationTest {
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         // pas d'evidence verifiee
 
+        makePublishable(offer);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.validateAndPublish(offer.getId()))
                 .isInstanceOf(com.eparly.api.auth.exception.ApiException.class);
     }
@@ -219,6 +235,7 @@ class OfferCatalogIntegrationTest {
         CommercialOffer offer = createDraftOffer(provider, "Sans Prix", OfferSector.MOBILE_PLAN);
         createVerifiedEvidence(offer, "https://example-mobile.com/offers/plan");
 
+        makePublishable(offer);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.validateAndPublish(offer.getId()))
                 .isInstanceOf(com.eparly.api.auth.exception.ApiException.class);
     }
@@ -331,6 +348,7 @@ class OfferCatalogIntegrationTest {
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(offer, "https://example-stream.com/stale");
 
+        makePublishable(offer);
         CommercialOfferResponse published = service.validateAndPublish(offer.getId());
         assertThat(published.publicationStatus()).isEqualTo(OfferStatus.VERIFIED);
 
@@ -426,6 +444,7 @@ class OfferCatalogIntegrationTest {
         pricing.setPromotionDurationMonths(3);
         pricingRepository.saveAndFlush(pricing);
         createVerifiedEvidence(offer, "https://example-stream.com/offer");
+        makePublishable(offer);
         service.validateAndPublish(offer.getId());
 
         assertThat(service.getPublicOffer(offer.getId()).pricing().promotionVerified()).isFalse();
@@ -493,6 +512,7 @@ class OfferCatalogIntegrationTest {
             CommercialOffer o = createDraftOffer(provider, "Offre " + i, OfferSector.STREAMING);
             createPricing(o, 999L, OfferBillingPeriod.MONTHLY);
             createVerifiedEvidence(o, "https://example-stream.com/offre" + i);
+            makePublishable(o);
             service.validateAndPublish(o.getId());
         }
 
@@ -517,7 +537,9 @@ class OfferCatalogIntegrationTest {
         createPricing(mo, 1999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(so, "https://stream.com/o");
         createVerifiedEvidence(mo, "https://mobile.com/o");
+        makePublishable(so);
         service.validateAndPublish(so.getId());
+        makePublishable(mo);
         service.validateAndPublish(mo.getId());
 
         mockMvc.perform(get("/v1/offers")
@@ -536,6 +558,7 @@ class OfferCatalogIntegrationTest {
         CommercialOffer offer = createDraftOffer(provider, "Detail", OfferSector.STREAMING);
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(offer, "https://example-stream.com/detail");
+        makePublishable(offer);
         CommercialOfferResponse published = service.validateAndPublish(offer.getId());
 
         mockMvc.perform(get("/v1/offers/{id}", published.id())
@@ -631,6 +654,7 @@ class OfferCatalogIntegrationTest {
         CommercialOffer offer = createDraftOffer(provider, "Stale", OfferSector.STREAMING);
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(offer, "https://example-stream.com/stale");
+        makePublishable(offer);
         service.validateAndPublish(offer.getId());
 
         // Rendre stale
@@ -654,6 +678,7 @@ class OfferCatalogIntegrationTest {
         CommercialOffer offer = createDraftOffer(provider, "Current", OfferSector.STREAMING);
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(offer, "https://filtered.example/current");
+        makePublishable(offer);
         service.validateAndPublish(offer.getId());
 
         OfferProvider staleProvider = createProvider("Filtered Stale", OfferSector.STREAMING,
@@ -695,6 +720,7 @@ class OfferCatalogIntegrationTest {
         oldEvidence.setVerifiedAt(Instant.now().minus(60, ChronoUnit.DAYS));
         evidenceRepository.saveAndFlush(oldEvidence);
         createVerifiedEvidence(offer, "https://evidence-order.example/current");
+        makePublishable(offer);
         service.validateAndPublish(offer.getId());
 
         mockMvc.perform(get("/v1/offers/{id}", offer.getId())
@@ -713,6 +739,7 @@ class OfferCatalogIntegrationTest {
         CommercialOffer offer = createDraftOffer(provider, "Invalidated", OfferSector.STREAMING);
         createPricing(offer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(offer, "https://invalidation.example/current");
+        makePublishable(offer);
         service.validateAndPublish(offer.getId());
 
         OfferEvidence invalidation = new OfferEvidence();
@@ -732,6 +759,7 @@ class OfferCatalogIntegrationTest {
     @Test
     @DisplayName("Un fournisseur inactif, une offre future ou une validation inconnue ne sont pas publiés")
     void inactiveFutureAndUnknownVerificationAreExcluded() throws Exception {
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/Paris"));
         User user = activeUser();
 
         OfferProvider inactiveProvider = createProvider("Inactive", OfferSector.STREAMING, "https://inactive.example");
@@ -746,7 +774,7 @@ class OfferCatalogIntegrationTest {
         OfferProvider futureProvider = createProvider("Future", OfferSector.STREAMING, "https://future.example");
         CommercialOffer futureOffer = createDraftOffer(futureProvider, "Future Offer", OfferSector.STREAMING);
         futureOffer.setPublicationStatus(OfferStatus.VERIFIED);
-        futureOffer.setValidFrom(LocalDate.now().plusDays(1));
+        futureOffer.setValidFrom(today.plusDays(1));
         offerRepository.saveAndFlush(futureOffer);
         createPricing(futureOffer, 999L, OfferBillingPeriod.MONTHLY);
         createVerifiedEvidence(futureOffer, "https://future.example/offer");

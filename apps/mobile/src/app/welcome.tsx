@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
 import React, { useEffect } from 'react';
 import {
-  Platform,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -23,6 +22,7 @@ import { EparlyLogo } from '@/components/eparly-logo';
 import { PastelBackground } from '@/components/onboarding/pastel-background';
 import { WelcomeActions } from '@/components/welcome/welcome-actions';
 import { BRAND_COLORS } from '@/constants/colors';
+import { FONT_FAMILY } from '@/constants/typography';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -256,19 +256,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headline: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 32,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
     textAlign: 'center',
     letterSpacing: -0.6,
     lineHeight: 40,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'sans-serif-medium',
-      default: 'system-ui',
-    }),
   },
   description: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 15.5,
     fontWeight: '400',
     color: BRAND_COLORS.secondaryText,
@@ -277,11 +274,6 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     marginTop: 10,
     maxWidth: 320,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'sans-serif',
-      default: 'system-ui',
-    }),
   },
   bottomSection: {
     paddingHorizontal: 24,

@@ -30,6 +30,7 @@ import {
 } from '@/components/auth/auth-icons';
 import { PastelBackground } from '@/components/onboarding/pastel-background';
 import { BRAND_COLORS } from '@/constants/colors';
+import { FONT_FAMILY } from '@/constants/typography';
 import { useAuth } from '@/context/auth-context';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -426,28 +427,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 28,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
     textAlign: 'center',
     letterSpacing: -0.5,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'sans-serif-medium',
-      default: 'system-ui',
-    }),
   },
   subtitle: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13.5,
     color: BRAND_COLORS.secondaryText,
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'sans-serif',
-      default: 'system-ui',
-    }),
   },
   formSection: {
     width: '100%',
@@ -551,6 +544,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   loginButtonText: {
+    fontFamily: FONT_FAMILY.semiBold,
     fontSize: 15.5,
     fontWeight: '600',
     color: BRAND_COLORS.darkCharcoal,
@@ -600,6 +594,7 @@ const styles = StyleSheet.create({
     }),
   },
   googleButtonText: {
+    fontFamily: FONT_FAMILY.semiBold,
     fontSize: 14.5,
     fontWeight: '600',
     color: BRAND_COLORS.darkCharcoal,
@@ -611,10 +606,12 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   footerPrompt: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13.5,
     color: BRAND_COLORS.secondaryText,
   },
   footerLink: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 13.5,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,

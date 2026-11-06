@@ -121,6 +121,184 @@
         "expiresAt": null,
         "evidenceScope": "OFFER"
       }
+    },
+    {
+      "providerKey": "sfr-mobile",
+      "commercialName": "SFR 2H 1 Go 5G",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": true,
+        "voice": "2h appels, SMS/MMS illimites",
+        "dataGb": 1,
+        "commitmentMonths": 0
+      },
+      "eligibilityConditions": "Prix standard, frais de carte SIM et conditions completes non verifies.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 599,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": "Prix Client Box 1.99 EUR/mois, reserve aux clients box SFR.",
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-mobile/forfait-2h-1go-5g",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-mobile",
+      "commercialName": "SFR 20 Go 5G",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": true,
+        "voice": "Appels, SMS, MMS illimites",
+        "dataGb": 20,
+        "commitmentMonths": 0
+      },
+      "eligibilityConditions": "Prix standard, frais de carte SIM et conditions completes non verifies.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 1599,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": "Prix Client Box 8.99 EUR/mois, reserve aux clients box SFR.",
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-mobile/forfait-20go-5g",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-mobile",
+      "commercialName": "SFR 80 Go 5G",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": true,
+        "voice": "Appels, SMS, MMS illimites",
+        "dataGb": 80,
+        "commitmentMonths": 0
+      },
+      "eligibilityConditions": "Prix standard, frais de carte SIM et conditions completes non verifies.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 1799,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": "Prix Client Box 11.99 EUR/mois, reserve aux clients box SFR.",
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-mobile/forfait-80go-5g",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-mobile",
+      "commercialName": "SFR 200 Go 5G",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": true,
+        "voice": "Appels, SMS, MMS illimites",
+        "dataGb": 200,
+        "commitmentMonths": 0
+      },
+      "eligibilityConditions": "Prix standard, frais de carte SIM et conditions completes non verifies.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 1999,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": "Prix Client Box 14.99 EUR/mois, reserve aux clients box SFR.",
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-mobile/forfait-200go-5g",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-mobile",
+      "commercialName": "SFR 500 Go 5G+",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": true,
+        "voice": "Appels, SMS, MMS illimites",
+        "dataGb": 500
+      },
+      "eligibilityConditions": "Prix standard, frais de carte SIM et conditions completes non verifies.",
+      "commitment": null,
+      "pricing": {
+        "amountMinor": 2499,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": "Prix Client Box 19.99 EUR/mois, reserve aux clients box SFR.",
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-mobile/forfait-500go-5g-plus",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-mobile",
+      "commercialName": "SFR Offre Speciale Illimite 5G+",
+      "sector": "MOBILE_PLAN",
+      "territory": "FR",
+      "characteristics": {
+        "network5G": true,
+        "voice": "Appels et SMS illimites, data illimitee en France",
+        "unlimitedData": true
+      },
+      "eligibilityConditions": "Prix standard, frais de carte SIM et conditions completes non verifies.",
+      "commitment": null,
+      "pricing": {
+        "amountMinor": 3999,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": "Prix Client Box 31.99 EUR/mois, reserve aux clients box SFR.",
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-mobile/forfait-illimite-5g-plus",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
     }
   ]
 }

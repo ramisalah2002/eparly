@@ -1,10 +1,11 @@
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
+import { FONT_FAMILY } from '@/constants/typography';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code' | 'heading' | 'caption';
   themeColor?: ThemeColor;
 };
 
@@ -16,42 +17,65 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 
 const styles = StyleSheet.create({
   small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400',
   },
   smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  caption: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: '500',
+    letterSpacing: 0.1,
   },
   default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  heading: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 34,
+    fontWeight: '700',
+    lineHeight: 40,
+    letterSpacing: -0.8,
   },
   subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
+    fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '600',
+    letterSpacing: -0.4,
   },
   link: {
-    lineHeight: 30,
+    fontFamily: FONT_FAMILY.medium,
+    lineHeight: 22,
     fontSize: 14,
   },
   linkPrimary: {
-    lineHeight: 30,
+    fontFamily: FONT_FAMILY.semiBold,
+    lineHeight: 22,
     fontSize: 14,
-    color: '#3c87f7',
+    color: '#8067A1',
   },
   code: {
     fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
+    fontWeight: Platform.select({ android: '700' }) ?? '500',
     fontSize: 12,
   },
 });

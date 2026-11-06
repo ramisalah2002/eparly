@@ -1,75 +1,214 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReducedMotion } from 'react-native-reanimated';
 import * as DocumentPicker from 'expo-document-picker';
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   FileSpreadsheet,
   FileText,
+  FileX,
+  RotateCcw,
+  ShieldCheck,
   Upload,
+  WifiOff,
   X,
 } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
+import { MOTION } from '@/constants/motion';
+import { FONT_FAMILY } from '@/constants/typography';
 import { Spacing } from '@/constants/theme';
 import {
   confirmCsvImport,
   CsvFilePayload,
   getOrCreateDefaultAccount,
+  ImportIssue,
   ImportJobDetails,
   ImportPreviewResponse,
   previewCsvImport,
 } from '@/services/import-api';
 import { formatCurrencyMinor, formatDateDisplay } from '@/utils/formatters';
+import { triggerHaptic } from '@/utils/haptics';
+import {
+  determinePreviewStep,
+  isNetworkError,
+  sanitizeErrorMessage,
+} from './import-helpers';
 
-interface ImportCsvModalProps {
+export { determinePreviewStep, isNetworkError, sanitizeErrorMessage };
+
+export interface ImportCsvModalProps {
   visible: boolean;
   onClose: () => void;
   onImportSuccess?: (job: ImportJobDetails) => void;
+  locale?: string;
 }
 
-type Step = 'PICK' | 'PREVIEW' | 'IMPORTING' | 'SUCCESS' | 'ERROR';
+export type ImportModalStep =
+  | 'PICK'
+  | 'ANALYZING'
+  | 'PREVIEW'
+  | 'IMPORTING'
+  | 'SUCCESS'
+  | 'DUPLICATE_ONLY'
+  | 'ERROR_NETWORK'
+  | 'ERROR_INVALID_FILE'
+  | 'ERROR_UNREADABLE'
+  | 'ERROR_SERVER';
 
 export function ImportCsvModal({
   visible,
   onClose,
   onImportSuccess,
+  locale = 'fr-FR',
 }: ImportCsvModalProps) {
-  const [step, setStep] = useState<Step>('PICK');
+  const insets = useSafeAreaInsets();
+  const isReducedMotion = useReducedMotion();
+  const isFrench = locale.toLowerCase().startsWith('fr');
+
+  const [step, setStep] = useState<ImportModalStep>('PICK');
   const [selectedFile, setSelectedFile] = useState<CsvFilePayload | null>(null);
   const [previewData, setPreviewData] = useState<ImportPreviewResponse | null>(null);
   const [importResult, setImportResult] = useState<ImportJobDetails | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [issueList, setIssueList] = useState<ImportIssue[]>([]);
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     setStep('PICK');
     setSelectedFile(null);
     setPreviewData(null);
     setImportResult(null);
     setErrorMessage(null);
+    setIssueList([]);
     setAccountId(null);
-    setIsAnalyzing(false);
-  };
+    setIsProcessing(false);
+  }, []);
 
   const handleClose = () => {
+    if (step === 'IMPORTING') return; // Prevent corrupting in-flight import
     resetState();
     onClose();
   };
 
+  /**
+   * Runs the two-stage analysis pipeline:
+   * 1. Resolve or create user's primary bank account
+   * 2. Request backend CSV preview & validation
+   */
+  const executeAnalysis = async (filePayload: CsvFilePayload) => {
+    try {
+      setIsProcessing(true);
+      setStep('ANALYZING');
+      setErrorMessage(null);
+      setIssueList([]);
+
+      // 1. Resolve or retrieve default account
+      const accountRes = await getOrCreateDefaultAccount();
+      if (!accountRes.success || !accountRes.data) {
+        setIsProcessing(false);
+        const err = accountRes.error || '';
+        if (isNetworkError(err)) {
+          setStep('ERROR_NETWORK');
+          setErrorMessage(isFrench ? 'Impossible de joindre le serveur pour initialiser le compte.' : 'Unable to connect to server.');
+        } else {
+          setStep('ERROR_SERVER');
+          setErrorMessage(sanitizeErrorMessage(err));
+        }
+        return;
+      }
+
+      const currentAccountId = accountRes.data.id;
+      setAccountId(currentAccountId);
+
+      // 2. Request backend preview and deduplication check
+      const previewRes = await previewCsvImport(currentAccountId, filePayload);
+      setIsProcessing(false);
+
+      if (!previewRes.success || !previewRes.data) {
+        const rawErr = previewRes.error || '';
+        if (isNetworkError(rawErr)) {
+          setStep('ERROR_NETWORK');
+          setErrorMessage(
+            isFrench
+              ? 'Connexion interrompue lors de l’analyse du fichier.'
+              : 'Connection interrupted during statement analysis.'
+          );
+        } else if (
+          rawErr.toLowerCase().includes('impossible de lire') ||
+          rawErr.toLowerCase().includes('bytes')
+        ) {
+          setStep('ERROR_UNREADABLE');
+          setErrorMessage(
+            isFrench
+              ? 'Le fichier sélectionné est illisible ou inaccessible localement.'
+              : 'The selected local file cannot be read.'
+          );
+        } else {
+          setStep('ERROR_INVALID_FILE');
+          setErrorMessage(sanitizeErrorMessage(rawErr));
+        }
+        return;
+      }
+
+      const data = previewRes.data;
+      setPreviewData(data);
+
+      const nextStep = determinePreviewStep(data);
+      if (nextStep === 'ERROR_INVALID_FILE') {
+        setStep('ERROR_INVALID_FILE');
+        setIssueList(data.errors || []);
+        setErrorMessage(
+          isFrench
+            ? 'Ce fichier comporte des anomalies bloquantes empêchant son intégration.'
+            : 'Blocking validation issues prevent importing this statement.'
+        );
+        return;
+      }
+
+      if (nextStep === 'DUPLICATE_ONLY') {
+        setStep('DUPLICATE_ONLY');
+        void triggerHaptic.selection();
+        return;
+      }
+
+      // Valid preview with new transactions to insert
+      setStep('PREVIEW');
+      void triggerHaptic.selection();
+    } catch (err) {
+      setIsProcessing(false);
+      const msg = err instanceof Error ? err.message : '';
+      if (isNetworkError(msg)) {
+        setStep('ERROR_NETWORK');
+        setErrorMessage(
+          isFrench ? 'Connexion réseau indisponible.' : 'Network connection unavailable.'
+        );
+      } else {
+        setStep('ERROR_SERVER');
+        setErrorMessage(sanitizeErrorMessage(msg));
+      }
+    }
+  };
+
+  /**
+   * Opens the native document picker.
+   */
   const handlePickDocument = async () => {
     try {
       setErrorMessage(null);
+      setIssueList([]);
 
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -92,61 +231,48 @@ export function ImportCsvModal({
         name: asset.name || 'releve.csv',
         mimeType: asset.mimeType || 'text/csv',
         size: asset.size,
-        fileObj: (asset as any).file,
+        fileObj: (asset as { file?: File | Blob }).file,
       };
 
       setSelectedFile(payload);
-      setIsAnalyzing(true);
-      setStep('PREVIEW');
-
-      // 1. Resolve or create user's default bank account
-      const accountRes = await getOrCreateDefaultAccount();
-      if (!accountRes.success || !accountRes.data) {
-        setErrorMessage(accountRes.error || 'Impossible d’accéder à votre compte bancaire.');
-        setStep('ERROR');
-        setIsAnalyzing(false);
-        return;
-      }
-
-      const currentAccountId = accountRes.data.id;
-      setAccountId(currentAccountId);
-
-      // 2. Request backend CSV preview & validation
-      const previewRes = await previewCsvImport(currentAccountId, payload);
-      if (!previewRes.success || !previewRes.data) {
-        setErrorMessage(previewRes.error || 'Erreur lors de l’analyse du fichier CSV.');
-        setStep('ERROR');
-        setIsAnalyzing(false);
-        return;
-      }
-
-      setPreviewData(previewRes.data);
-      setIsAnalyzing(false);
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Erreur inattendue');
-      setStep('ERROR');
-      setIsAnalyzing(false);
+      await executeAnalysis(payload);
+    } catch {
+      setStep('ERROR_UNREADABLE');
+      setErrorMessage(
+        isFrench
+          ? 'Impossible d’accéder au document sélectionné.'
+          : 'Unable to access the chosen file.'
+      );
     }
   };
 
+  /**
+   * Executes atomic database confirmation with the validated file hash.
+   */
   const handleConfirmImport = async () => {
-    if (!accountId || !selectedFile || !previewData) {
+    if (!accountId || !selectedFile || !previewData || isProcessing) {
       return;
     }
 
     try {
+      setIsProcessing(true);
       setStep('IMPORTING');
       setErrorMessage(null);
 
       const mappingToApply = previewData.suggestedMapping || previewData.appliedMapping;
       if (!mappingToApply) {
-        setErrorMessage('Mapping de colonnes introuvable.');
-        setStep('ERROR');
+        setIsProcessing(false);
+        setStep('ERROR_INVALID_FILE');
+        setErrorMessage(
+          isFrench
+            ? 'Format de colonnes bancaires non reconnu.'
+            : 'Bank column structure not recognized.'
+        );
         return;
       }
 
       const chosenCharset = previewData.charsetAmbiguous
-        ? (previewData.detectedCharset || previewData.charsetCandidates?.[0] || 'WINDOWS_1252')
+        ? previewData.detectedCharset || previewData.charsetCandidates?.[0] || 'WINDOWS_1252'
         : previewData.detectedCharset;
 
       const res = await confirmCsvImport({
@@ -157,21 +283,67 @@ export function ImportCsvModal({
         charset: chosenCharset,
       });
 
+      setIsProcessing(false);
+
       if (!res.success || !res.data) {
-        setErrorMessage(res.error || 'Échec de l’enregistrement de l’import.');
-        setStep('ERROR');
+        const rawErr = res.error || '';
+        if (isNetworkError(rawErr)) {
+          setStep('ERROR_NETWORK');
+          setErrorMessage(
+            isFrench
+              ? 'Connexion perdue pendant l’enregistrement.'
+              : 'Connection lost during ledger commit.'
+          );
+        } else {
+          setStep('ERROR_SERVER');
+          setErrorMessage(sanitizeErrorMessage(rawErr));
+        }
         return;
       }
 
       const job = res.data.importJob;
       setImportResult(job);
       setStep('SUCCESS');
+      void triggerHaptic.success();
       onImportSuccess?.(job);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Erreur lors de l’import');
-      setStep('ERROR');
+      setIsProcessing(false);
+      const msg = err instanceof Error ? err.message : '';
+      if (isNetworkError(msg)) {
+        setStep('ERROR_NETWORK');
+        setErrorMessage(
+          isFrench
+            ? 'Connexion réseau indisponible pendant l’import.'
+            : 'Network connection lost during import.'
+        );
+      } else {
+        setStep('ERROR_SERVER');
+        setErrorMessage(sanitizeErrorMessage(msg));
+      }
     }
   };
+
+  /**
+   * Safe retry handler that re-runs the last operation on the existing file
+   * without forcing a document picker re-open.
+   */
+  const handleRetry = async () => {
+    if (!selectedFile) {
+      void handlePickDocument();
+      return;
+    }
+
+    if (previewData && previewData.fileHash && accountId) {
+      // Retry confirmation
+      await handleConfirmImport();
+    } else {
+      // Retry analysis
+      await executeAnalysis(selectedFile);
+    }
+  };
+
+  const scalePress = isReducedMotion ? 1.0 : MOTION.scale.buttonPress;
+  const scaleAction = isReducedMotion ? 1.0 : MOTION.scale.actionPress;
 
   return (
     <Modal
@@ -180,259 +352,650 @@ export function ImportCsvModal({
       animationType="fade"
       onRequestClose={handleClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalBackdrop} />
+        {/* Backdrop: dismissable unless actively processing an import */}
+        <AnimatedPressable
+          style={styles.modalBackdrop}
+          onPress={step !== 'IMPORTING' && step !== 'ANALYZING' ? handleClose : undefined}
+          accessibilityLabel="Fermer la fenêtre modale"
+          accessibilityRole="button"
+          scaleTarget={1.0}
+        />
 
-        <View style={styles.modalCard}>
+        <View
+          style={[
+            styles.modalCard,
+            { paddingBottom: Math.max(insets.bottom, 20) + 10 },
+          ]}>
+          {/* Sheet Handle */}
+          <View style={styles.handle} />
+
           {/* Modal Header */}
           <View style={styles.modalHeader}>
             <View style={styles.headerTitleGroup}>
               <View style={styles.headerIconCircle}>
-                <FileSpreadsheet size={20} color={BRAND_COLORS.deepLavender} strokeWidth={2.2} />
+                <FileSpreadsheet
+                  size={19}
+                  color={BRAND_COLORS.deepLavender}
+                  strokeWidth={2.2}
+                />
               </View>
               <View>
-                <Text style={styles.modalTitle}>Importer un relevé CSV</Text>
-                <Text style={styles.modalSubtitle}>Formats bancaires automatiques</Text>
+                <Text style={styles.modalTitle}>
+                  {isFrench ? 'Importer un relevé' : 'Import Bank Statement'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  {isFrench ? 'Formats bancaires standards' : 'Standard bank statement formats'}
+                </Text>
               </View>
             </View>
 
-            <TouchableOpacity
+            <AnimatedPressable
               onPress={handleClose}
-              style={styles.closeBtn}
-              accessibilityLabel="Fermer"
+              scaleTarget={scalePress}
+              disabled={isProcessing || step === 'IMPORTING'}
+              style={[
+                styles.closeBtn,
+                (isProcessing || step === 'IMPORTING') && styles.disabledBtn,
+              ]}
+              accessibilityLabel={isFrench ? 'Fermer' : 'Close'}
               accessibilityRole="button">
-              <X size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2.2} />
-            </TouchableOpacity>
+              <X size={15} color={BRAND_COLORS.darkCharcoal} strokeWidth={2.2} />
+            </AnimatedPressable>
           </View>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
+            bounces={false}
             contentContainerStyle={styles.scrollContent}>
-            {/* STEP 1: PICK FILE */}
+            {/* =========================================================================
+                STATE 1: FILE SELECTION (PICK)
+               ========================================================================= */}
             {step === 'PICK' && (
-              <View style={styles.stepContainer}>
-                <View style={styles.dropZone}>
-                  <View style={styles.dropZoneIconCircle}>
-                    <Upload size={28} color={BRAND_COLORS.deepLavender} strokeWidth={2.2} />
+              <View style={styles.stateWrapper}>
+                <View style={styles.editorialPickCard}>
+                  <View style={styles.pickIconBadge}>
+                    <Upload size={24} color={BRAND_COLORS.deepLavender} strokeWidth={2.2} />
                   </View>
-                  <Text style={styles.dropZoneTitle}>Sélectionnez votre relevé bancaire</Text>
-                  <Text style={styles.dropZoneDesc}>
-                    {"Fichiers .csv (jusqu'à 5 Mo). Détection automatique des séparateurs, devises et colonnes."}
+                  <Text style={styles.pickCardTitle}>
+                    {isFrench ? 'Sélectionnez votre relevé bancaire' : 'Select your bank statement'}
+                  </Text>
+                  <Text style={styles.pickCardDescription}>
+                    {isFrench
+                      ? 'Relevé au format CSV ou TSV (jusqu’à 5 Mo). Vos écritures seront analysées avec détection automatique des colonnes.'
+                      : 'CSV or TSV statement (up to 5 MB). Columns and dates will be validated automatically.'}
                   </Text>
 
-                  <TouchableOpacity
+                  {/* Format chips */}
+                  <View style={styles.formatChipRow}>
+                    <View style={styles.formatChip}>
+                      <Text style={styles.formatChipText}>.CSV</Text>
+                    </View>
+                    <View style={styles.formatChip}>
+                      <Text style={styles.formatChipText}>.TSV</Text>
+                    </View>
+                    <View style={styles.formatChip}>
+                      <Text style={styles.formatChipText}>UTF-8 / ISO</Text>
+                    </View>
+                    <View style={styles.formatChip}>
+                      <Text style={styles.formatChipText}>Max 5 Mo</Text>
+                    </View>
+                  </View>
+
+                  <AnimatedPressable
                     onPress={handlePickDocument}
-                    activeOpacity={0.8}
+                    scaleTarget={scaleAction}
+                    haptic="light"
                     style={styles.primaryBtn}
                     accessibilityRole="button"
-                    accessibilityLabel="Choisir un fichier CSV">
-                    <Text style={styles.primaryBtnText}>Choisir un fichier</Text>
-                  </TouchableOpacity>
+                    accessibilityLabel={isFrench ? 'Choisir un fichier' : 'Select a file'}>
+                    <Text style={styles.primaryBtnText}>
+                      {isFrench ? 'Choisir un fichier' : 'Select statement file'}
+                    </Text>
+                  </AnimatedPressable>
                 </View>
 
-                {/* Info Callout */}
-                <View style={styles.infoCallout}>
-                  <Text style={styles.infoCalloutTitle}>Banques prises en charge</Text>
-                  <Text style={styles.infoCalloutText}>
-                    Boursorama, BNP Paribas, Société Générale, Crédit Agricole, Revolut, N26, CIC, et tous les exports CSV standards.
+                {/* Privacy & Anti-Duplicate Footnote */}
+                <View style={styles.securityPill}>
+                  <ShieldCheck size={14} color={BRAND_COLORS.secondaryText} strokeWidth={2} />
+                  <Text style={styles.securityPillText}>
+                    {isFrench
+                      ? 'Protection anti-doublon active • Aucune écriture dupliquée'
+                      : 'Active duplicate protection • No duplicated records'}
                   </Text>
                 </View>
               </View>
             )}
 
-            {/* STEP 2: PREVIEW & VALIDATION */}
-            {step === 'PREVIEW' && (
-              <View style={styles.stepContainer}>
-                {isAnalyzing ? (
-                  <View style={styles.analyzingBox}>
-                    <ActivityIndicator size="large" color={BRAND_COLORS.deepLavender} />
-                    <Text style={styles.analyzingText}>Analyse et déduplication du fichier...</Text>
-                    {selectedFile && (
-                      <Text style={styles.analyzingFileName}>{selectedFile.name}</Text>
-                    )}
+            {/* =========================================================================
+                STATE 2: ANALYSIS & PARSING (ANALYZING)
+               ========================================================================= */}
+            {step === 'ANALYZING' && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.spinnerCircle}>
+                  <ActivityIndicator size="small" color={BRAND_COLORS.deepLavender} />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench ? 'Analyse du relevé...' : 'Analyzing statement...'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {isFrench
+                    ? 'Détection de l’encodage, des colonnes et contrôle des doublons.'
+                    : 'Detecting character encoding, column mapping, and duplicate records.'}
+                </Text>
+                {selectedFile && (
+                  <View style={styles.fileCapsule}>
+                    <FileText size={13} color={BRAND_COLORS.deepLavender} strokeWidth={2} />
+                    <Text style={styles.fileCapsuleName} numberOfLines={1} ellipsizeMode="middle">
+                      {selectedFile.name}
+                    </Text>
                   </View>
-                ) : previewData ? (
-                  <View style={styles.previewContainer}>
-                    {/* File badge summary */}
-                    <View style={styles.fileSummaryCard}>
-                      <View style={styles.fileSummaryRow}>
-                        <FileText size={20} color={BRAND_COLORS.deepLavender} strokeWidth={2} />
-                        <View style={styles.fileSummaryTextCol}>
-                          <Text style={styles.fileSummaryName} numberOfLines={1}>
-                            {selectedFile?.name}
-                          </Text>
-                          <Text style={styles.fileSummaryMeta}>
-                            {previewData.totalRows} opération{previewData.totalRows > 1 ? 's' : ''} détectée{previewData.totalRows > 1 ? 's' : ''} • Encodage {previewData.detectedCharset || 'UTF-8'}
-                          </Text>
-                        </View>
-                      </View>
+                )}
+              </View>
+            )}
 
-                      {/* Insertion summary stats */}
-                      <View style={styles.statsRow}>
-                        <View style={styles.statBox}>
-                          <Text style={styles.statNumber}>{previewData.wouldInsert}</Text>
-                          <Text style={styles.statLabel}>À ajouter</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statBox}>
-                          <Text style={[styles.statNumber, { color: BRAND_COLORS.secondaryText }]}>
-                            {previewData.wouldSkip}
-                          </Text>
-                          <Text style={styles.statLabel}>Doublons ignorés</Text>
-                        </View>
-                      </View>
+            {/* =========================================================================
+                STATE 3: PREVIEW (PREVIEW with wouldInsert > 0)
+               ========================================================================= */}
+            {step === 'PREVIEW' && previewData && (
+              <View style={styles.stateWrapper}>
+                {/* File summary pill */}
+                <View style={styles.documentSummaryPill}>
+                  <View style={styles.docPillLeft}>
+                    <FileText size={17} color={BRAND_COLORS.deepLavender} strokeWidth={2} />
+                    <View style={styles.docPillTextCol}>
+                      <Text style={styles.docPillName} numberOfLines={1} ellipsizeMode="middle">
+                        {selectedFile?.name || 'releve.csv'}
+                      </Text>
+                      <Text style={styles.docPillMeta}>
+                        {previewData.totalRows} {isFrench ? 'écritures détectées' : 'rows detected'} •{' '}
+                        {previewData.detectedCharset || 'UTF-8'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Ledger metrics overview card */}
+                <View style={styles.ledgerMetricsCard}>
+                  <View style={styles.ledgerMetricBox}>
+                    <Text style={styles.ledgerMetricNumber}>+{previewData.wouldInsert}</Text>
+                    <Text style={styles.ledgerMetricLabel}>
+                      {isFrench ? 'À intégrer au journal' : 'To ledger'}
+                    </Text>
+                  </View>
+                  <View style={styles.ledgerMetricDivider} />
+                  <View style={styles.ledgerMetricBox}>
+                    <Text style={[styles.ledgerMetricNumber, { color: BRAND_COLORS.secondaryText }]}>
+                      {previewData.wouldSkip}
+                    </Text>
+                    <Text style={styles.ledgerMetricLabel}>
+                      {isFrench ? 'Doublons ignorés' : 'Duplicates skipped'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Non-blocking warnings banner if present */}
+                {previewData.warnings && previewData.warnings.length > 0 && (
+                  <View style={styles.warningBanner}>
+                    <AlertTriangle size={15} color="#B45309" strokeWidth={2.2} />
+                    <Text style={styles.warningBannerText}>
+                      {isFrench
+                        ? `${previewData.warnings.length} remarque(s) mineure(s) non bloquante(s) sur le format.`
+                        : `${previewData.warnings.length} non-blocking format notice(s).`}
+                    </Text>
+                  </View>
+                )}
+
+                {/* 3 Sample Transactions Preview */}
+                {previewData.sample && previewData.sample.length > 0 && (
+                  <View style={styles.sampleContainer}>
+                    <View style={styles.sampleSectionHeader}>
+                      <Text style={styles.sampleSectionTitle}>
+                        {isFrench ? 'Extrait des opérations détectées' : 'Sample detected records'}
+                      </Text>
+                      <Text style={styles.sampleSectionCaption}>
+                        {isFrench ? '3 premières lignes' : 'First 3 lines'}
+                      </Text>
                     </View>
 
-                    {/* Blocking errors alert if any */}
-                    {previewData.blocking && previewData.errors && previewData.errors.length > 0 && (
-                      <View style={styles.errorCallout}>
-                        <AlertCircle size={20} color="#E11D48" strokeWidth={2.2} />
-                        <View style={styles.errorCalloutContent}>
-                          <Text style={styles.errorCalloutTitle}>Erreurs bloquantes détectées</Text>
-                          {previewData.errors.slice(0, 3).map((err, i) => (
-                            <Text key={i} style={styles.errorCalloutItem}>
-                              Ligne {err.line} : {err.message}
+                    <View style={styles.sampleListCard}>
+                      {previewData.sample.slice(0, 3).map((item, idx) => {
+                        const isIncome = item.amountMinor > 0;
+                        return (
+                          <View
+                            key={idx}
+                            style={[
+                              styles.sampleItemRow,
+                              idx === previewData.sample!.slice(0, 3).length - 1 && styles.lastSampleItemRow,
+                            ]}>
+                            <View style={styles.sampleRowLeft}>
+                              <Text style={styles.sampleItemLabel} numberOfLines={1}>
+                                {item.label}
+                              </Text>
+                              <Text style={styles.sampleItemDate}>
+                                {formatDateDisplay(item.bookingDate)}
+                              </Text>
+                            </View>
+                            <Text
+                              style={[
+                                styles.sampleItemAmount,
+                                isIncome ? styles.sampleIncomeAmount : styles.sampleExpenseAmount,
+                              ]}>
+                              {formatCurrencyMinor(item.amountMinor, item.currency, {
+                                showSign: true,
+                              })}
                             </Text>
-                          ))}
-                        </View>
-                      </View>
-                    )}
-
-                    {/* Sample preview rows */}
-                    {previewData.sample && previewData.sample.length > 0 && (
-                      <View style={styles.sampleSection}>
-                        <Text style={styles.sampleSectionTitle}>Aperçu des opérations détectées</Text>
-                        <View style={styles.sampleList}>
-                          {previewData.sample.slice(0, 3).map((item, index) => {
-                            const isExpense = item.amountMinor < 0;
-                            return (
-                              <View key={index} style={styles.sampleRow}>
-                                <View style={styles.sampleRowLeft}>
-                                  <Text style={styles.sampleLabel} numberOfLines={1}>
-                                    {item.label}
-                                  </Text>
-                                  <Text style={styles.sampleDate}>
-                                    {formatDateDisplay(item.bookingDate)}
-                                  </Text>
-                                </View>
-                                <Text
-                                  style={[
-                                    styles.sampleAmount,
-                                    isExpense ? styles.expenseAmount : styles.incomeAmount,
-                                  ]}>
-                                  {formatCurrencyMinor(item.amountMinor, item.currency, {
-                                    showSign: true,
-                                  })}
-                                </Text>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    )}
-
-                    {/* Action Buttons */}
-                    <View style={styles.actionButtonsCol}>
-                      {!previewData.blocking && (
-                        <TouchableOpacity
-                          onPress={handleConfirmImport}
-                          activeOpacity={0.8}
-                          style={styles.primaryBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel="Confirmer l'import">
-                          <Text style={styles.primaryBtnText}>
-                            {`Confirmer l'import (${previewData.wouldInsert} opération${previewData.wouldInsert > 1 ? 's' : ''})`}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-
-                      <TouchableOpacity
-                        onPress={handlePickDocument}
-                        activeOpacity={0.7}
-                        style={styles.secondaryBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Choisir un autre fichier">
-                        <Text style={styles.secondaryBtnText}>Choisir un autre fichier</Text>
-                      </TouchableOpacity>
+                          </View>
+                        );
+                      })}
                     </View>
                   </View>
-                ) : null}
-              </View>
-            )}
+                )}
 
-            {/* STEP 3: IMPORTING IN PROGRESS */}
-            {step === 'IMPORTING' && (
-              <View style={styles.statusBox}>
-                <ActivityIndicator size="large" color={BRAND_COLORS.deepLavender} />
-                <Text style={styles.statusTitle}>Importation en cours...</Text>
-                <Text style={styles.statusDesc}>
-                  Enregistrement et sécurisation des écritures comptables
-                </Text>
-              </View>
-            )}
-
-            {/* STEP 4: SUCCESS */}
-            {step === 'SUCCESS' && importResult && (
-              <View style={styles.statusBox}>
-                <View style={styles.successIconCircle}>
-                  <CheckCircle2 size={44} color="#10B981" strokeWidth={2.2} />
-                </View>
-                <Text style={styles.statusTitle}>Importation réussie !</Text>
-                <Text style={styles.statusDesc}>
-                  Vos transactions ont été intégrées avec succès à votre compte.
-                </Text>
-
-                {/* Results badge */}
-                <View style={styles.successStatsCard}>
-                  <View style={styles.successStatRow}>
-                    <Text style={styles.successStatLabel}>Opérations ajoutées :</Text>
-                    <Text style={styles.successStatValue}>+{importResult.insertedRows}</Text>
-                  </View>
-                  {importResult.skippedRows > 0 && (
-                    <View style={styles.successStatRow}>
-                      <Text style={styles.successStatLabel}>Doublons ignorés :</Text>
-                      <Text style={styles.successStatValue}>{importResult.skippedRows}</Text>
-                    </View>
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  onPress={handleClose}
-                  activeOpacity={0.8}
-                  style={styles.primaryBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Voir mes transactions">
-                  <Text style={styles.primaryBtnText}>Voir mes transactions</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* STEP 5: ERROR */}
-            {step === 'ERROR' && (
-              <View style={styles.statusBox}>
-                <View style={styles.errorIconCircle}>
-                  <AlertCircle size={44} color="#E11D48" strokeWidth={2.2} />
-                </View>
-                <Text style={styles.statusTitle}>{"Impossible d'importer"}</Text>
-                <Text style={styles.errorDetailsText}>{errorMessage || 'Une erreur est survenue.'}</Text>
-
-                <View style={styles.actionButtonsCol}>
-                  <TouchableOpacity
-                    onPress={handlePickDocument}
-                    activeOpacity={0.8}
+                {/* Actions */}
+                <View style={styles.actionCol}>
+                  <AnimatedPressable
+                    onPress={handleConfirmImport}
+                    scaleTarget={scaleAction}
+                    haptic="light"
+                    disabled={isProcessing}
                     style={styles.primaryBtn}
                     accessibilityRole="button"
-                    accessibilityLabel="Réessayer">
-                    <Text style={styles.primaryBtnText}>Réessayer avec un autre fichier</Text>
-                  </TouchableOpacity>
+                    accessibilityLabel={
+                      isFrench
+                        ? `Confirmer l'import de ${previewData.wouldInsert} opérations`
+                        : `Confirm import of ${previewData.wouldInsert} transactions`
+                    }>
+                    <Text style={styles.primaryBtnText}>
+                      {isFrench
+                        ? `Confirmer l’import (+${previewData.wouldInsert} opération${previewData.wouldInsert > 1 ? 's' : ''})`
+                        : `Confirm import (+${previewData.wouldInsert} transaction${previewData.wouldInsert > 1 ? 's' : ''})`}
+                    </Text>
+                  </AnimatedPressable>
 
-                  <TouchableOpacity
-                    onPress={handleClose}
-                    activeOpacity={0.7}
+                  <AnimatedPressable
+                    onPress={handlePickDocument}
+                    scaleTarget={scalePress}
+                    haptic="light"
+                    disabled={isProcessing}
                     style={styles.secondaryBtn}
                     accessibilityRole="button"
-                    accessibilityLabel="Annuler">
-                    <Text style={styles.secondaryBtnText}>Annuler</Text>
-                  </TouchableOpacity>
+                    accessibilityLabel={
+                      isFrench ? 'Choisir un autre fichier' : 'Select another file'
+                    }>
+                    <Text style={styles.secondaryBtnText}>
+                      {isFrench ? 'Choisir un autre fichier' : 'Select another file'}
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
+            )}
+
+            {/* =========================================================================
+                STATE 4: IMPORT IN PROGRESS (IMPORTING)
+               ========================================================================= */}
+            {step === 'IMPORTING' && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.spinnerCircle}>
+                  <ActivityIndicator size="small" color={BRAND_COLORS.deepLavender} />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench ? 'Intégration au journal...' : 'Ledgering transactions...'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {isFrench
+                    ? 'Enregistrement sécurisé des opérations et mise à jour de vos comptes.'
+                    : 'Securely committing entries and refreshing account balance.'}
+                </Text>
+              </View>
+            )}
+
+            {/* =========================================================================
+                STATE 5: SUCCESSFUL IMPORT (SUCCESS)
+               ========================================================================= */}
+            {step === 'SUCCESS' && importResult && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.successIconCircle}>
+                  <CheckCircle2
+                    size={36}
+                    color={BRAND_COLORS.mutedMintGreen}
+                    strokeWidth={2.4}
+                  />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench ? 'Importation terminée' : 'Import completed'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {isFrench
+                    ? 'Vos transactions ont été intégrées avec succès à votre journal.'
+                    : 'Your bank transactions have been ledgered successfully.'}
+                </Text>
+
+                {/* Success metrics */}
+                <View style={styles.resultDetailsCard}>
+                  <View style={styles.resultDetailRow}>
+                    <Text style={styles.resultDetailLabel}>
+                      {isFrench ? 'Opérations ajoutées' : 'Transactions added'}
+                    </Text>
+                    <Text style={styles.resultDetailValueAdded}>
+                      +{importResult.insertedRows}
+                    </Text>
+                  </View>
+
+                  {importResult.skippedRows > 0 && (
+                    <View style={styles.resultDetailRow}>
+                      <Text style={styles.resultDetailLabel}>
+                        {isFrench ? 'Doublons ignorés' : 'Duplicates skipped'}
+                      </Text>
+                      <Text style={styles.resultDetailValueMuted}>
+                        {importResult.skippedRows}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.resultDetailRow}>
+                    <Text style={styles.resultDetailLabel}>
+                      {isFrench ? 'Compte destination' : 'Destination account'}
+                    </Text>
+                    <Text style={styles.resultDetailValueMuted}>
+                      {isFrench ? 'Compte principal' : 'Primary account'}
+                    </Text>
+                  </View>
+                </View>
+
+                <AnimatedPressable
+                  onPress={handleClose}
+                  scaleTarget={scaleAction}
+                  haptic="light"
+                  style={styles.primaryBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isFrench ? 'Consulter mon journal' : 'View my journal'
+                  }>
+                  <Text style={styles.primaryBtnText}>
+                    {isFrench ? 'Consulter mon journal' : 'View my journal'}
+                  </Text>
+                </AnimatedPressable>
+              </View>
+            )}
+
+            {/* =========================================================================
+                STATE 6: DUPLICATE-ONLY OUTCOME (DUPLICATE_ONLY when wouldInsert === 0)
+               ========================================================================= */}
+            {step === 'DUPLICATE_ONLY' && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.shieldIconCircle}>
+                  <ShieldCheck
+                    size={36}
+                    color={BRAND_COLORS.deepLavender}
+                    strokeWidth={2.2}
+                  />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench
+                    ? 'Toutes les opérations sont déjà importées'
+                    : 'All transactions already imported'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {isFrench
+                    ? `Les ${previewData?.wouldSkip || previewData?.totalRows || 0} opérations détectées dans ce fichier figurent déjà dans votre journal. Aucune nouvelle écriture n’a été ajoutée pour éviter les doublons.`
+                    : `All ${previewData?.wouldSkip || previewData?.totalRows || 0} transactions in this statement already exist in your journal. No duplicate records were added.`}
+                </Text>
+
+                {/* Anti-duplicate stats badge */}
+                <View style={styles.duplicateStatsPill}>
+                  <View style={styles.duplicateStatItem}>
+                    <Text style={styles.duplicateStatNumber}>0</Text>
+                    <Text style={styles.duplicateStatLabel}>
+                      {isFrench ? 'À ajouter' : 'To add'}
+                    </Text>
+                  </View>
+                  <View style={styles.ledgerMetricDivider} />
+                  <View style={styles.duplicateStatItem}>
+                    <Text style={[styles.duplicateStatNumber, { color: BRAND_COLORS.deepLavender }]}>
+                      {previewData?.wouldSkip || previewData?.totalRows || 0}
+                    </Text>
+                    <Text style={styles.duplicateStatLabel}>
+                      {isFrench ? 'Doublons évités' : 'Duplicates avoided'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.actionCol}>
+                  <AnimatedPressable
+                    onPress={handleClose}
+                    scaleTarget={scaleAction}
+                    haptic="light"
+                    style={styles.primaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFrench ? 'Compris' : 'Understood'}>
+                    <Text style={styles.primaryBtnText}>
+                      {isFrench ? 'Compris' : 'Understood'}
+                    </Text>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    onPress={handlePickDocument}
+                    scaleTarget={scalePress}
+                    haptic="light"
+                    style={styles.secondaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isFrench ? 'Choisir un autre fichier' : 'Select another file'
+                    }>
+                    <Text style={styles.secondaryBtnText}>
+                      {isFrench ? 'Choisir un autre fichier' : 'Select another file'}
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
+            )}
+
+            {/* =========================================================================
+                STATE 7: NETWORK INTERRUPTION (ERROR_NETWORK)
+               ========================================================================= */}
+            {step === 'ERROR_NETWORK' && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.warningIconCircle}>
+                  <WifiOff size={34} color={BRAND_COLORS.deepLavender} strokeWidth={2.2} />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench ? 'Connexion interrompue' : 'Connection interrupted'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {errorMessage ||
+                    (isFrench
+                      ? 'Impossible de joindre le serveur. Vérifiez votre connexion internet.'
+                      : 'Unable to reach the server. Please check your internet connection.')}
+                </Text>
+
+                <View style={styles.actionCol}>
+                  <AnimatedPressable
+                    onPress={handleRetry}
+                    scaleTarget={scaleAction}
+                    haptic="light"
+                    style={styles.primaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFrench ? 'Réessayer' : 'Retry'}>
+                    <View style={styles.btnRow}>
+                      <RotateCcw size={15} color={BRAND_COLORS.pureWhite} strokeWidth={2.2} />
+                      <Text style={styles.primaryBtnText}>
+                        {isFrench ? 'Réessayer' : 'Retry'}
+                      </Text>
+                    </View>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    onPress={handleClose}
+                    scaleTarget={scalePress}
+                    haptic="light"
+                    style={styles.secondaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFrench ? 'Annuler' : 'Cancel'}>
+                    <Text style={styles.secondaryBtnText}>
+                      {isFrench ? 'Annuler' : 'Cancel'}
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
+            )}
+
+            {/* =========================================================================
+                STATE 8A: INVALID FILE FORMAT / BLOCKING ERRORS (ERROR_INVALID_FILE)
+               ========================================================================= */}
+            {step === 'ERROR_INVALID_FILE' && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.errorIconCircle}>
+                  <FileX size={34} color="#DC2626" strokeWidth={2.2} />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench ? 'Fichier non reconnu' : 'Unrecognized file'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {errorMessage ||
+                    (isFrench
+                      ? 'Le fichier CSV ne contient pas les colonnes attendues (Date, Libellé, Montant) ou présente un encodage non supporté.'
+                      : 'The CSV statement is missing required columns (Date, Label, Amount) or uses an unsupported format.')}
+                </Text>
+
+                {/* Issue details list if provided by backend */}
+                {issueList.length > 0 && (
+                  <View style={styles.issueDetailsCard}>
+                    <Text style={styles.issueDetailsHeading}>
+                      {isFrench ? 'Détails des anomalies' : 'Validation issues'}
+                    </Text>
+                    {issueList.slice(0, 3).map((issue, idx) => (
+                      <Text key={idx} style={styles.issueItemText}>
+                        • {isFrench ? `Ligne ${issue.line}` : `Row ${issue.line}`} : {issue.message}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.actionCol}>
+                  <AnimatedPressable
+                    onPress={handlePickDocument}
+                    scaleTarget={scaleAction}
+                    haptic="light"
+                    style={styles.primaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isFrench ? 'Choisir un autre fichier' : 'Select another file'
+                    }>
+                    <Text style={styles.primaryBtnText}>
+                      {isFrench ? 'Choisir un autre fichier' : 'Select another file'}
+                    </Text>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    onPress={handleClose}
+                    scaleTarget={scalePress}
+                    haptic="light"
+                    style={styles.secondaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFrench ? 'Annuler' : 'Cancel'}>
+                    <Text style={styles.secondaryBtnText}>
+                      {isFrench ? 'Annuler' : 'Cancel'}
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
+            )}
+
+            {/* =========================================================================
+                STATE 8B: UNREADABLE LOCAL FILE (ERROR_UNREADABLE)
+               ========================================================================= */}
+            {step === 'ERROR_UNREADABLE' && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.errorIconCircle}>
+                  <AlertCircle size={34} color="#DC2626" strokeWidth={2.2} />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench ? 'Lecture du fichier impossible' : 'Cannot read file'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {errorMessage ||
+                    (isFrench
+                      ? 'Le système n’a pas pu accéder au fichier local sélectionné. Veuillez sélectionner à nouveau votre export.'
+                      : 'The local file could not be accessed. Please select the file again.')}
+                </Text>
+
+                <View style={styles.actionCol}>
+                  <AnimatedPressable
+                    onPress={handlePickDocument}
+                    scaleTarget={scaleAction}
+                    haptic="light"
+                    style={styles.primaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isFrench ? 'Sélectionner à nouveau' : 'Select again'
+                    }>
+                    <Text style={styles.primaryBtnText}>
+                      {isFrench ? 'Sélectionner à nouveau' : 'Select again'}
+                    </Text>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    onPress={handleClose}
+                    scaleTarget={scalePress}
+                    haptic="light"
+                    style={styles.secondaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFrench ? 'Annuler' : 'Cancel'}>
+                    <Text style={styles.secondaryBtnText}>
+                      {isFrench ? 'Annuler' : 'Cancel'}
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
+            )}
+
+            {/* =========================================================================
+                STATE 8C: SERVER EXECUTION ERROR (ERROR_SERVER)
+               ========================================================================= */}
+            {step === 'ERROR_SERVER' && (
+              <View style={styles.statusStateBox}>
+                <View style={styles.errorIconCircle}>
+                  <AlertCircle size={34} color="#DC2626" strokeWidth={2.2} />
+                </View>
+                <Text style={styles.statusTitle}>
+                  {isFrench ? 'Traitement interrompu' : 'Processing interrupted'}
+                </Text>
+                <Text style={styles.statusDesc}>
+                  {errorMessage ||
+                    (isFrench
+                      ? 'Une erreur est survenue lors de l’enregistrement. Aucun doublon n’a été sauvegardé.'
+                      : 'An error occurred during ledger commit. No duplicate records were saved.')}
+                </Text>
+
+                <View style={styles.actionCol}>
+                  <AnimatedPressable
+                    onPress={handleRetry}
+                    scaleTarget={scaleAction}
+                    haptic="light"
+                    style={styles.primaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFrench ? 'Réessayer' : 'Retry'}>
+                    <View style={styles.btnRow}>
+                      <RotateCcw size={15} color={BRAND_COLORS.pureWhite} strokeWidth={2.2} />
+                      <Text style={styles.primaryBtnText}>
+                        {isFrench ? 'Réessayer' : 'Retry'}
+                      </Text>
+                    </View>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    onPress={handlePickDocument}
+                    scaleTarget={scalePress}
+                    haptic="light"
+                    style={styles.secondaryBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isFrench ? 'Choisir un autre fichier' : 'Select another file'
+                    }>
+                    <Text style={styles.secondaryBtnText}>
+                      {isFrench ? 'Choisir un autre fichier' : 'Select another file'}
+                    </Text>
+                  </AnimatedPressable>
                 </View>
               </View>
             )}
@@ -447,7 +1010,7 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(36, 37, 53, 0.45)',
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFill,
@@ -457,19 +1020,27 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     maxHeight: '90%',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingTop: 10,
     shadowColor: BRAND_COLORS.darkCharcoal,
-    shadowOffset: { width: 0, height: -4 },
+    shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(36, 37, 53, 0.15)',
+    alignSelf: 'center',
+    marginBottom: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
+    paddingTop: Spacing.three,
     paddingBottom: Spacing.three,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(168, 155, 190, 0.15)',
@@ -478,22 +1049,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   headerIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: BRAND_COLORS.veryLightLavender,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 17,
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 16.5,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
     letterSpacing: -0.2,
   },
   modalSubtitle: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 12,
     color: BRAND_COLORS.secondaryText,
     marginTop: 1,
@@ -505,301 +1079,440 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND_COLORS.warmOffWhite,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 155, 190, 0.18)',
+  },
+  disabledBtn: {
+    opacity: 0.5,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.three,
   },
-  stepContainer: {
-    gap: 16,
+  stateWrapper: {
+    gap: 14,
   },
-  dropZone: {
-    borderWidth: 2,
-    borderColor: 'rgba(128, 103, 161, 0.25)',
-    borderStyle: 'dashed',
+  editorialPickCard: {
+    backgroundColor: BRAND_COLORS.warmOffWhite,
     borderRadius: 20,
     padding: Spacing.four,
     alignItems: 'center',
-    backgroundColor: BRAND_COLORS.warmOffWhite,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.cardBorder,
     gap: 10,
   },
-  dropZoneIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  pickIconBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: BRAND_COLORS.veryLightLavender,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  pickCardTitle: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 16,
+    fontWeight: '700',
+    color: BRAND_COLORS.darkCharcoal,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  pickCardDescription: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 12.5,
+    color: BRAND_COLORS.secondaryText,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 8,
+  },
+  formatChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'center',
+    marginVertical: 4,
+  },
+  formatChip: {
+    backgroundColor: BRAND_COLORS.pureWhite,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 155, 190, 0.22)',
+  },
+  formatChipText: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 11,
+    color: BRAND_COLORS.darkCharcoal,
+  },
+  securityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  securityPillText: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11.5,
+    color: BRAND_COLORS.secondaryText,
+  },
+  statusStateBox: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    gap: 12,
+  },
+  spinnerCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: BRAND_COLORS.veryLightLavender,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
-  dropZoneTitle: {
-    fontSize: 16,
+  statusTitle: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 17,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
     textAlign: 'center',
+    letterSpacing: -0.2,
+    paddingHorizontal: 16,
   },
-  dropZoneDesc: {
+  statusDesc: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     color: BRAND_COLORS.secondaryText,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  fileCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BRAND_COLORS.warmOffWhite,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.cardBorder,
+    marginTop: 4,
+    maxWidth: '90%',
+  },
+  fileCapsuleName: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 12,
+    color: BRAND_COLORS.darkCharcoal,
+  },
+  documentSummaryPill: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: BRAND_COLORS.warmOffWhite,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.cardBorder,
+  },
+  docPillLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  docPillTextCol: {
+    flex: 1,
+  },
+  docPillName: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: BRAND_COLORS.darkCharcoal,
+  },
+  docPillMeta: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11.5,
+    color: BRAND_COLORS.secondaryText,
+    marginTop: 1,
+  },
+  ledgerMetricsCard: {
+    flexDirection: 'row',
+    backgroundColor: BRAND_COLORS.warmOffWhite,
+    borderRadius: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.cardBorder,
+  },
+  ledgerMetricBox: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  ledgerMetricNumber: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 22,
+    fontWeight: '700',
+    color: BRAND_COLORS.deepLavender,
+    letterSpacing: -0.3,
+  },
+  ledgerMetricLabel: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 11.5,
+    color: BRAND_COLORS.secondaryText,
+  },
+  ledgerMetricDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(168, 155, 190, 0.22)',
+    alignSelf: 'center',
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  warningBannerText: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 11.5,
+    color: '#92400E',
+    flex: 1,
+  },
+  sampleContainer: {
+    gap: 6,
+  },
+  sampleSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingHorizontal: 2,
+  },
+  sampleSectionTitle: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 12,
+    fontWeight: '700',
+    color: BRAND_COLORS.secondaryText,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sampleSectionCaption: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11,
+    color: BRAND_COLORS.secondaryText,
+  },
+  sampleListCard: {
+    backgroundColor: BRAND_COLORS.warmOffWhite,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.cardBorder,
+    overflow: 'hidden',
+  },
+  sampleItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  lastSampleItemRow: {
+    borderBottomWidth: 0,
+  },
+  sampleRowLeft: {
+    flex: 1,
+    paddingRight: 10,
+    gap: 1,
+  },
+  sampleItemLabel: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 13,
+    color: BRAND_COLORS.darkCharcoal,
+  },
+  sampleItemDate: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11,
+    color: BRAND_COLORS.secondaryText,
+  },
+  sampleItemAmount: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  sampleExpenseAmount: {
+    color: BRAND_COLORS.darkCharcoal,
+  },
+  sampleIncomeAmount: {
+    color: BRAND_COLORS.mutedMintGreen,
+  },
+  actionCol: {
+    gap: 8,
+    marginTop: 4,
+    width: '100%',
   },
   primaryBtn: {
     backgroundColor: BRAND_COLORS.deepLavender,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
     borderRadius: 14,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryBtnText: {
+    fontFamily: FONT_FAMILY.bold,
     color: BRAND_COLORS.pureWhite,
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
+    letterSpacing: -0.1,
   },
   secondaryBtn: {
+    backgroundColor: BRAND_COLORS.warmOffWhite,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 14,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: BRAND_COLORS.warmOffWhite,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 155, 190, 0.22)',
   },
   secondaryBtnText: {
+    fontFamily: FONT_FAMILY.semiBold,
     color: BRAND_COLORS.secondaryText,
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '600',
   },
-  infoCallout: {
-    backgroundColor: BRAND_COLORS.warmOffWhite,
-    borderRadius: 16,
-    padding: Spacing.three,
-    borderWidth: 1,
-    borderColor: BRAND_COLORS.cardBorder,
-    gap: 4,
-  },
-  infoCalloutTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  infoCalloutText: {
-    fontSize: 12,
-    color: BRAND_COLORS.secondaryText,
-    lineHeight: 17,
-  },
-  analyzingBox: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    gap: 14,
-  },
-  analyzingText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  analyzingFileName: {
-    fontSize: 13,
-    color: BRAND_COLORS.secondaryText,
-  },
-  previewContainer: {
-    gap: 16,
-  },
-  fileSummaryCard: {
-    backgroundColor: BRAND_COLORS.warmOffWhite,
-    borderRadius: 18,
-    padding: Spacing.three + 2,
-    borderWidth: 1,
-    borderColor: BRAND_COLORS.cardBorder,
-    gap: 12,
-  },
-  fileSummaryRow: {
+  btnRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  fileSummaryTextCol: {
-    flex: 1,
-  },
-  fileSummaryName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  fileSummaryMeta: {
-    fontSize: 12,
-    color: BRAND_COLORS.secondaryText,
-    marginTop: 2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: BRAND_COLORS.pureWhite,
-    borderRadius: 12,
-    paddingVertical: 10,
-  },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: BRAND_COLORS.deepLavender,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: BRAND_COLORS.secondaryText,
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(168, 155, 190, 0.2)',
-  },
-  errorCallout: {
-    flexDirection: 'row',
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-    borderRadius: 16,
-    padding: Spacing.three,
-    gap: 10,
-  },
-  errorCalloutContent: {
-    flex: 1,
-    gap: 4,
-  },
-  errorCalloutTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#991B1B',
-  },
-  errorCalloutItem: {
-    fontSize: 12,
-    color: '#B91C1C',
-  },
-  sampleSection: {
     gap: 8,
-  },
-  sampleSectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: BRAND_COLORS.secondaryText,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sampleList: {
-    backgroundColor: BRAND_COLORS.pureWhite,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BRAND_COLORS.cardBorder,
-    overflow: 'hidden',
-  },
-  sampleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
-  },
-  sampleRowLeft: {
-    flex: 1,
-    paddingRight: 10,
-    gap: 2,
-  },
-  sampleLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  sampleDate: {
-    fontSize: 11,
-    color: BRAND_COLORS.secondaryText,
-  },
-  sampleAmount: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  expenseAmount: {
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  incomeAmount: {
-    color: '#10B981',
-  },
-  actionButtonsCol: {
-    gap: 8,
-    marginTop: 4,
-  },
-  statusBox: {
-    paddingVertical: 32,
-    alignItems: 'center',
-    gap: 12,
   },
   successIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: BRAND_COLORS.softMintBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  shieldIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(128, 103, 161, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  warningIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: BRAND_COLORS.veryLightLavender,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
   errorIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(225, 29, 72, 0.12)',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(220, 38, 38, 0.10)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-    textAlign: 'center',
-  },
-  statusDesc: {
-    fontSize: 13,
-    color: BRAND_COLORS.secondaryText,
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 20,
-  },
-  errorDetailsText: {
-    fontSize: 13,
-    color: '#E11D48',
-    textAlign: 'center',
-    paddingHorizontal: 16,
-  },
-  successStatsCard: {
+  resultDetailsCard: {
     backgroundColor: BRAND_COLORS.warmOffWhite,
     borderRadius: 16,
-    padding: Spacing.three,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     width: '100%',
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.cardBorder,
     gap: 8,
-    marginVertical: 8,
+    marginVertical: 4,
   },
-  successStatRow: {
+  resultDetailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  successStatLabel: {
+  resultDetailLabel: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     color: BRAND_COLORS.secondaryText,
-    fontWeight: '500',
   },
-  successStatValue: {
+  resultDetailValueAdded: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 14,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
+  },
+  resultDetailValueMuted: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 13,
+    color: BRAND_COLORS.darkCharcoal,
+  },
+  duplicateStatsPill: {
+    flexDirection: 'row',
+    backgroundColor: BRAND_COLORS.warmOffWhite,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.cardBorder,
+    marginVertical: 4,
+  },
+  duplicateStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  duplicateStatNumber: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 20,
+    fontWeight: '700',
+    color: BRAND_COLORS.darkCharcoal,
+  },
+  duplicateStatLabel: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11,
+    color: BRAND_COLORS.secondaryText,
+  },
+  issueDetailsCard: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 12,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    gap: 4,
+  },
+  issueDetailsHeading: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#991B1B',
+    marginBottom: 2,
+  },
+  issueItemText: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11.5,
+    color: '#B91C1C',
+    lineHeight: 16,
   },
 });

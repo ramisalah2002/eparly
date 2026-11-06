@@ -48,6 +48,10 @@ public class CommercialOffer {
     @Column(name = "characteristics", columnDefinition = "text")
     private String characteristics;
 
+    /** Ecrite par le batch seul ; une offre de reference ne peut pas etre publiee (contrainte V25). */
+    @Column(name = "reference_kind", insertable = false, updatable = false)
+    private String referenceKind;
+
     @Column(name = "eligibility_conditions", columnDefinition = "text")
     private String eligibilityConditions;
 
@@ -76,6 +80,29 @@ public class CommercialOffer {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reuse_rights_status", nullable = false, length = 20)
+    private OfferReuseRights reuseRightsStatus = OfferReuseRights.NOT_ESTABLISHED;
+
+    @Column(name = "reuse_rights_basis", length = 500)
+    private String reuseRightsBasis;
+
+    public OfferReuseRights getReuseRightsStatus() {
+        return reuseRightsStatus;
+    }
+
+    public void setReuseRightsStatus(OfferReuseRights reuseRightsStatus) {
+        this.reuseRightsStatus = reuseRightsStatus;
+    }
+
+    public String getReuseRightsBasis() {
+        return reuseRightsBasis;
+    }
+
+    public void setReuseRightsBasis(String reuseRightsBasis) {
+        this.reuseRightsBasis = reuseRightsBasis;
+    }
 
     @Version
     @Column(name = "version", nullable = false)
@@ -108,6 +135,7 @@ public class CommercialOffer {
     public OfferSector getSector() { return sector; }
     public void setSector(OfferSector sector) { this.sector = sector; }
 
+    public String getReferenceKind() { return referenceKind; }
     public String getCharacteristics() { return characteristics; }
     public void setCharacteristics(String characteristics) { this.characteristics = characteristics; }
 

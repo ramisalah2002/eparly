@@ -1,42 +1,110 @@
-import React from 'react';
-import { useRouter } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Linking,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import {
+  Bell,
+  CreditCard,
+  FileText,
+  Globe,
+  HelpCircle,
+  KeyRound,
+  Languages,
+  LogOut,
+  RotateCcw,
+  Shield,
+  ShieldCheck,
+  UserCheck,
+  Wallet,
+} from 'lucide-react-native';
 
+import {
+  AccountsViewerSheet,
+  LegalSheet,
+  PasswordResetSheet,
+  PersonalInfoSheet,
+  ProfileIdentityCard,
+  SettingsRow,
+  SettingsSection,
+  SignOutConfirmSheet,
+} from '@/components/profile';
 import { BRAND_COLORS } from '@/constants/colors';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { FONT_FAMILY } from '@/constants/typography';
 import { useAuth } from '@/context/auth-context';
+import { AccountItem, fetchAccounts } from '@/services/dashboard-api';
 import { resetOnboarding } from '@/services/onboarding-storage';
-import { getAvatarInitials } from '@/utils/formatters';
+import { triggerHaptic } from '@/utils/haptics';
 
+/**
+ * Editorial Profile & Settings Screen (Concept A+).
+ * The Personal Monograph with Account Ledger Insight.
+ */
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { user, signOut, checkSession } = useAuth();
 
-  const initials = getAvatarInitials(user?.fullName, user?.email);
+  const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isSigningOut, setIsSigningOut] = useState<boolean>(false);
 
-  const handleSignOut = async () => {
-    Alert.alert('Déconnexion', 'Êtes-vous sûr de vouloir vous déconnecter ?', [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Déconnexion',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut();
-          router.replace('/(auth)/sign-in');
-        },
-      },
+  // Bottom Sheets State Machine
+  const [isSignOutSheetVisible, setIsSignOutSheetVisible] = useState<boolean>(false);
+  const [isPersonalInfoVisible, setIsPersonalInfoVisible] = useState<boolean>(false);
+  const [isAccountsSheetVisible, setIsAccountsSheetVisible] = useState<boolean>(false);
+  const [isPasswordResetVisible, setIsPasswordResetVisible] = useState<boolean>(false);
+  const [isLegalSheetVisible, setIsLegalSheetVisible] = useState<boolean>(false);
+
+  const loadData = useCallback(async (refresh = false) => {
+    if (refresh) setIsRefreshing(true);
+    const [accRes] = await Promise.all([
+      fetchAccounts(),
+      checkSession(),
     ]);
+
+    if (accRes.success && accRes.data) {
+      setAccounts(accRes.data);
+    }
+    if (refresh) setIsRefreshing(false);
+  }, [checkSession]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const handleSignOutConfirm = async () => {
+    try {
+      setIsSigningOut(true);
+      void triggerHaptic.light();
+      await signOut();
+      setIsSigningOut(false);
+      setIsSignOutSheetVisible(false);
+      router.replace('/(auth)/sign-in');
+    } catch {
+      setIsSigningOut(false);
+    }
+  };
+
+  const handleContactSupport = () => {
+    void triggerHaptic.light();
+    void Linking.openURL('mailto:support@eparly.com?subject=Assistance%20Eparly');
   };
 
   const handleResetOnboarding = async () => {
+    void triggerHaptic.light();
     await resetOnboarding();
-    Alert.alert(
-      'Onboarding réinitialisé',
-      'Le parcours de découverte a été réinitialisé. Rechargez l’application pour revoir l’onboarding.'
-    );
   };
+
+  const primaryCurrency = user?.settings?.currency || 'EUR';
+  const countryCode = user?.settings?.country || 'FR';
 
   return (
     <View style={styles.container}>
@@ -47,76 +115,198 @@ export default function ProfileScreen() {
             paddingTop: Math.max(insets.top, Spacing.three) + Spacing.two,
             paddingBottom: insets.bottom + BottomTabInset + Spacing.four,
           },
-        ]}>
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadData(true)}
+            tintColor={BRAND_COLORS.deepLavender}
+            colors={[BRAND_COLORS.deepLavender]}
+            progressBackgroundColor={BRAND_COLORS.pureWhite}
+          />
+        }>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Mon Profil</Text>
-          <Text style={styles.subtitle}>Compte & Sécurité Eparly</Text>
+          <Text style={styles.subtitle}>Compte & Préférences Eparly</Text>
         </View>
 
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+        {/* 1. Personal Monograph Identity Card */}
+        <ProfileIdentityCard
+          user={user}
+          onPress={() => setIsPersonalInfoVisible(true)}
+        />
 
-          <Text style={styles.userName}>{user?.fullName || 'Utilisateur Eparly'}</Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
+        {/* 2. Account & Security Section */}
+        <SettingsSection title="Compte & Sécurité">
+          <SettingsRow
+            icon={UserCheck}
+            label="Informations du compte"
+            subtitle="Identité, email et statut de vérification"
+            onPress={() => setIsPersonalInfoVisible(true)}
+            accessibilityLabel="Informations du compte"
+          />
 
-          <View style={styles.badgeRow}>
-            <View style={styles.statusBadge}>
-              <View style={styles.activeDot} />
-              <Text style={styles.statusText}>{user?.status || 'ACTIVE'}</Text>
-            </View>
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>Email vérifié</Text>
-            </View>
-          </View>
+          <SettingsRow
+            icon={KeyRound}
+            label="Sécurité & Mot de passe"
+            subtitle="Réinitialisation sécurisée par code email"
+            onPress={() => setIsPasswordResetVisible(true)}
+            accessibilityLabel="Sécurité et mot de passe"
+          />
+
+          <SettingsRow
+            icon={ShieldCheck}
+            label="Session chiffrée"
+            subtitle="Stockage matériel souverain"
+            value="Active"
+            showChevron={false}
+            accessibilityLabel="Session chiffrée active"
+          />
+        </SettingsSection>
+
+        {/* 3. Financial Preferences Section */}
+        <SettingsSection title="Préférences financières">
+          <SettingsRow
+            icon={CreditCard}
+            label="Comptes & Relevés bancaires"
+            subtitle="Sources et déduplication des écritures"
+            value={`${accounts.length} actif${accounts.length > 1 ? 's' : ''}`}
+            onPress={() => setIsAccountsSheetVisible(true)}
+            accessibilityLabel={`Comptes bancaires, ${accounts.length} configurés`}
+          />
+
+          <SettingsRow
+            icon={Wallet}
+            label="Devise principale"
+            subtitle="Consolidation monétaire des relevés"
+            value={`${primaryCurrency} (€)`}
+            showChevron={false}
+            accessibilityLabel={`Devise principale : ${primaryCurrency}`}
+          />
+
+          <SettingsRow
+            icon={Globe}
+            label="Région & Formats"
+            subtitle="Norme de dates et séparateurs décimaux"
+            value={`${countryCode} • France`}
+            showChevron={false}
+            accessibilityLabel={`Région : ${countryCode}`}
+          />
+        </SettingsSection>
+
+        {/* 4. App & Privacy Preferences Section */}
+        <SettingsSection title="Application & Confidentialité">
+          <SettingsRow
+            icon={Languages}
+            label="Langue de l'interface"
+            subtitle="Configuration active de l'application"
+            value="Français"
+            showChevron={false}
+            accessibilityLabel="Langue de l'interface : Français"
+          />
+
+          <SettingsRow
+            icon={Bell}
+            label="Notifications système"
+            subtitle="Autorisations d'alertes financières"
+            value="Standard OS"
+            showChevron={false}
+            accessibilityLabel="Notifications système gérées par l'OS"
+          />
+
+          <SettingsRow
+            icon={FileText}
+            label="Protection des données (RGPD)"
+            subtitle="Gouvernance, export et droit à l'oubli"
+            onPress={() => setIsLegalSheetVisible(true)}
+            accessibilityLabel="Protection des données et RGPD"
+          />
+        </SettingsSection>
+
+        {/* 5. Support & Legal Section */}
+        <SettingsSection title="Support & Assistance">
+          <SettingsRow
+            icon={HelpCircle}
+            label="Contacter le support Eparly"
+            subtitle="Assistance dédiée sous 24h ouvrées"
+            onPress={handleContactSupport}
+            accessibilityLabel="Contacter le support Eparly"
+          />
+
+          <SettingsRow
+            icon={Shield}
+            label="Conditions & Mentions légales"
+            subtitle="Règles d'utilisation du service"
+            onPress={() => setIsLegalSheetVisible(true)}
+            accessibilityLabel="Conditions générales et mentions légales"
+          />
+        </SettingsSection>
+
+        {/* 6. Development Tools (Discrete, only in development) */}
+        {__DEV__ && (
+          <SettingsSection title="Outils de développement" caption="Visible uniquement en mode développement local">
+            <SettingsRow
+              icon={RotateCcw}
+              label="Réinitialiser l'onboarding"
+              subtitle="Permet de revoir le parcours d'accueil"
+              onPress={handleResetOnboarding}
+              accessibilityLabel="Réinitialiser l'onboarding"
+            />
+          </SettingsSection>
+        )}
+
+        {/* 7. Sign Out Action (Restrained Editorial Row) */}
+        <View style={styles.signOutWrapper}>
+          <SettingsRow
+            icon={LogOut}
+            iconColor="#E11D48"
+            iconBgColor="#FFF0F3"
+            label="Se déconnecter"
+            subtitle="Fermer la session sur cet appareil"
+            destructive
+            onPress={() => setIsSignOutSheetVisible(true)}
+            accessibilityLabel="Se déconnecter"
+          />
         </View>
 
-        {/* Settings Group */}
-        <View style={styles.settingsGroup}>
-          <Text style={styles.groupTitle}>Sécurité & Session</Text>
-
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Chiffrement des jetons</Text>
-            <Text style={styles.settingValue}>SecureStore matériel</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Rotation de session</Text>
-            <Text style={styles.settingValue}>Single-flight active</Text>
-          </View>
-        </View>
-
-        {/* Development Tools */}
-        <View style={styles.settingsGroup}>
-          <Text style={styles.groupTitle}>Préférences</Text>
-
-          <TouchableOpacity
-            onPress={handleResetOnboarding}
-            style={styles.settingActionRow}
-            activeOpacity={0.7}>
-            <Text style={styles.actionRowLabel}>Revoir le parcours d’onboarding</Text>
-            <Text style={styles.actionRowChevron}>›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Sign Out Button */}
-        <TouchableOpacity
-          onPress={handleSignOut}
-          activeOpacity={0.8}
-          style={styles.signOutButton}
-          accessibilityLabel="Se déconnecter"
-          accessibilityRole="button">
-          <Text style={styles.signOutText}>Se déconnecter</Text>
-        </TouchableOpacity>
-
-        {/* App Version */}
-        <Text style={styles.appVersionText}>Eparly v1.0.0 — Milestone 1 Dashboard</Text>
+        {/* App Version Footnote */}
+        <Text style={styles.appVersionText}>
+          Eparly v1.0.0 (Build 42) • Gestion financière personnelle
+        </Text>
       </ScrollView>
+
+      {/* Connected Bottom Sheets */}
+      <SignOutConfirmSheet
+        visible={isSignOutSheetVisible}
+        onClose={() => setIsSignOutSheetVisible(false)}
+        onConfirm={handleSignOutConfirm}
+        isSigningOut={isSigningOut}
+      />
+
+      <PersonalInfoSheet
+        visible={isPersonalInfoVisible}
+        user={user}
+        onClose={() => setIsPersonalInfoVisible(false)}
+      />
+
+      <AccountsViewerSheet
+        visible={isAccountsSheetVisible}
+        onClose={() => setIsAccountsSheetVisible(false)}
+        onAccountUpdated={() => loadData(false)}
+      />
+
+      <PasswordResetSheet
+        visible={isPasswordResetVisible}
+        email={user?.email}
+        onClose={() => setIsPasswordResetVisible(false)}
+      />
+
+      <LegalSheet
+        visible={isLegalSheetVisible}
+        onClose={() => setIsLegalSheetVisible(false)}
+      />
     </View>
   );
 }
@@ -134,163 +324,40 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: Spacing.three,
+    paddingHorizontal: 4,
   },
   title: {
+    fontFamily: FONT_FAMILY.bold,
     fontSize: 26,
     fontWeight: '700',
     color: BRAND_COLORS.darkCharcoal,
+    letterSpacing: -0.5,
   },
   subtitle: {
+    fontFamily: FONT_FAMILY.regular,
     fontSize: 13,
     color: BRAND_COLORS.secondaryText,
     marginTop: 2,
+    letterSpacing: -0.1,
   },
-  profileCard: {
-    backgroundColor: BRAND_COLORS.pureWhite,
-    borderRadius: 24,
-    padding: Spacing.four,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 155, 190, 0.28)',
-    shadowColor: '#242535',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    alignItems: 'center',
-    marginBottom: Spacing.three,
-  },
-  avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: BRAND_COLORS.veryLightLavender,
-    borderWidth: 2,
-    borderColor: BRAND_COLORS.mutedLavender,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.three,
-  },
-  avatarText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 13,
-    color: BRAND_COLORS.secondaryText,
-    marginBottom: Spacing.three,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: BRAND_COLORS.warmOffWhite,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#34A853',
-    marginRight: 6,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  verifiedBadge: {
-    backgroundColor: BRAND_COLORS.softMintBackground,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  verifiedText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#2E7D32',
-  },
-  settingsGroup: {
+  signOutWrapper: {
     backgroundColor: BRAND_COLORS.pureWhite,
     borderRadius: 20,
-    padding: Spacing.three + 2,
     borderWidth: 1,
-    borderColor: 'rgba(168, 155, 190, 0.2)',
-    marginBottom: Spacing.three,
-  },
-  groupTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: BRAND_COLORS.secondaryText,
-    marginBottom: Spacing.two,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  settingLabel: {
-    fontSize: 14,
-    color: BRAND_COLORS.darkCharcoal,
-  },
-  settingValue: {
-    fontSize: 13,
-    color: BRAND_COLORS.secondaryText,
-    fontWeight: '500',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.04)',
-    marginVertical: 6,
-  },
-  settingActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  actionRowLabel: {
-    fontSize: 14,
-    color: BRAND_COLORS.darkCharcoal,
-    fontWeight: '500',
-  },
-  actionRowChevron: {
-    fontSize: 18,
-    color: BRAND_COLORS.secondaryText,
-  },
-  signOutButton: {
-    backgroundColor: '#FFF0F0',
-    borderWidth: 1,
-    borderColor: 'rgba(225, 29, 72, 0.2)',
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginTop: Spacing.one,
-    marginBottom: Spacing.three,
-  },
-  signOutText: {
-    color: '#E11D48',
-    fontSize: 15,
-    fontWeight: '700',
+    borderColor: 'rgba(225, 29, 72, 0.18)',
+    shadowColor: BRAND_COLORS.darkCharcoal,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 20,
+    overflow: 'hidden',
   },
   appVersionText: {
     textAlign: 'center',
-    fontSize: 11,
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11.5,
     color: BRAND_COLORS.secondaryText,
-    marginBottom: Spacing.four,
+    marginBottom: Spacing.three,
   },
 });

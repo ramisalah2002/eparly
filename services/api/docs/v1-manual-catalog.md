@@ -89,3 +89,16 @@ brouillon toute offre non vérifiée.
 
 Le moteur générique `catalogsync` est conservé et désactivé. Pour le réactiver :
 mettre `eparly.catalog-sync.enabled=true` et configurer des sources autorisées.
+## 14. Traçabilité et corrections
+
+L'import enregistre `SYSTEM_IMPORT` ; `CATALOG_IMPORT_ACTOR_USER_ID` désigne le demandeur, pas l'auteur. Offre, tarif et
+preuve forment une seule transaction : un échec ne laisse aucun brouillon partiel. `evidence.consultedAt` est obligatoire
+et un `dataUnknown` absent vaut `true`.
+
+Pour corriger une offre existante, passer un fichier `revisions` à `--eparly.catalog-import.file` (exemple :
+`catalog-data/revisions/`). `expectedPricingVersion` rend le rejeu sans effet. La correction passe par les services
+métier, avec historique et audit. Ne jamais compléter un import par du SQL manuel.
+
+Chaque fournisseur reste enregistré par secteur : `uq_offer_providers_name_sector_ci` et les contrôles de publication
+exigent que le fournisseur et l'offre partagent le même secteur. SFR a donc une entrée `MOBILE_PLAN` et une entrée
+`INTERNET_BOX`, sans doublon.

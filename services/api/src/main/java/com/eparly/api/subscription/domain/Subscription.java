@@ -103,6 +103,39 @@ public class Subscription {
     public Subscription() {
     }
 
+    @Column(name = "commitment_end_date")
+    private LocalDate commitmentEndDate;
+
+    @Column(name = "no_longer_needed", nullable = false)
+    private boolean noLongerNeeded = false;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    public LocalDate getCommitmentEndDate() {
+        return commitmentEndDate;
+    }
+
+    public void setCommitmentEndDate(LocalDate commitmentEndDate) {
+        this.commitmentEndDate = commitmentEndDate;
+    }
+
+    public boolean isNoLongerNeeded() {
+        return noLongerNeeded;
+    }
+
+    public void setNoLongerNeeded(boolean noLongerNeeded) {
+        this.noLongerNeeded = noLongerNeeded;
+    }
+
+    public Instant getArchivedAt() {
+        return archivedAt;
+    }
+
+    public void setArchivedAt(Instant archivedAt) {
+        this.archivedAt = archivedAt;
+    }
+
     @PrePersist
     protected void onCreate() {
         Instant now = Instant.now();

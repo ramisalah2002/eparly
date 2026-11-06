@@ -18,6 +18,7 @@ public record CatalogSyncSourceResponse(
         String robotsStatus,
         Instant lastCheckedAt,
         Instant lastSuccessAt,
-        String lastError
+        String lastError,
+        String connectorKey
 ) {
 }

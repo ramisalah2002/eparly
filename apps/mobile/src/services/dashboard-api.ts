@@ -168,6 +168,29 @@ export async function fetchAccounts(): Promise<ApiResponse<AccountItem[]>> {
   }
 }
 
+/**
+ * Updates an account name using the real backend PATCH /v1/accounts/{id} endpoint.
+ */
+export async function updateAccount(
+  id: string,
+  name: string
+): Promise<ApiResponse<AccountItem>> {
+  try {
+    const res = await authenticatedFetch(`/v1/accounts/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (!res.ok) {
+      return { success: false, status: res.status, error: `Erreur (${res.status})` };
+    }
+    const data = (await res.json()) as AccountItem;
+    return { success: true, data, status: 200 };
+  } catch {
+    return { success: false, error: 'Connexion réseau impossible' };
+  }
+}
+
 let cachedCategories: CategoryItem[] | null = null;
 
 /**

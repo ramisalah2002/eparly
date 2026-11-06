@@ -1,0 +1,12 @@
+interface:
+  display_name: Review React Native Animations
+  short_description: Strict native motion and gesture reviews
+  default_prompt: Use $review-react-native-animations to review this Expo or React
+    Native interaction.
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

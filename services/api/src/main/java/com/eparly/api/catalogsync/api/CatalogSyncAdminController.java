@@ -1,5 +1,6 @@
 package com.eparly.api.catalogsync.api;
 
+import com.eparly.api.catalogsync.orchestration.CatalogCandidateDraftService;
 import com.eparly.api.catalogsync.orchestration.CatalogSyncAdminService;
 import com.eparly.api.auth.service.JwtUserId;
 import jakarta.validation.Valid;
@@ -24,8 +25,29 @@ import java.util.UUID;
 public class CatalogSyncAdminController {
     private final CatalogSyncAdminService service;
 
-    public CatalogSyncAdminController(CatalogSyncAdminService service) {
+    private final CatalogCandidateDraftService draftService;
+
+    public CatalogSyncAdminController(CatalogSyncAdminService service, CatalogCandidateDraftService draftService) {
         this.service = service;
+        this.draftService = draftService;
+    }
+
+    @GetMapping("/connectors")
+    public List<CatalogConnectorResponse> connectors() {
+        return service.connectors();
+    }
+
+    @GetMapping("/runs/{id}/sources")
+    public List<com.eparly.api.catalogsync.domain.CatalogSyncSourceReport> runSources(@PathVariable UUID id) {
+        return service.runSources(id);
+    }
+
+    @PostMapping("/candidates/{id}/draft")
+    @ResponseStatus(HttpStatus.CREATED)
+    public com.eparly.api.offer.dto.CommercialOfferResponse createDraft(
+            @PathVariable UUID id, @Valid @RequestBody CatalogCandidateDraftRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return draftService.createDraft(id, request, JwtUserId.from(jwt));
     }
 
     @PostMapping("/sources")

@@ -1,5 +1,10 @@
 # Collecte nocturne du catalogue commercial
 
+> Étape 14A : connecteurs, catégories, déduplication et historique sont décrits dans
+> [`catalog-collection-engine.md`](catalog-collection-engine.md), les sources dans
+> [`catalog-sources-inventory.md`](catalog-sources-inventory.md). Ce document reste la référence pour
+> le registre et la sécurité réseau. Les statuts d'exécution sont désormais `SUCCESS` et `PARTIAL_SUCCESS`.
+
 ## Architecture
 
 Le collecteur reste dans le monolithe Spring Boot, sous `com.eparly.api.catalogsync`.
@@ -33,7 +38,7 @@ Valeurs par défaut dans `application.properties` :
 
 ```properties
 eparly.catalog-sync.enabled=false
-eparly.catalog-sync.cron=0 0 4 * * *
+eparly.catalog-sync.cron=0 0 3 * * *
 eparly.catalog-sync.zone=Europe/Paris
 eparly.catalog-sync.user-agent=EparlyCatalogBot/1.0
 eparly.catalog-sync.contact=
@@ -48,7 +53,7 @@ eparly.catalog-sync.max-retries=2
 ```
 
 Le scheduler est conditionnel et ne s'exécute pas au démarrage. Il est actif à
-04:00, heure de Paris, uniquement si `CATALOG_SYNC_ENABLED=true` (ou la propriété
+03:00, heure de Paris, uniquement si `CATALOG_SYNC_ENABLED=true` (ou la propriété
 équivalente) est explicitement configuré dans un environnement actif. `cron` et
 `zone` sont surchargés par `CATALOG_SYNC_CRON` et `CATALOG_SYNC_ZONE`.
 Le bean interne `CatalogSyncJobService.runNow()` permet un lancement contrôlé pour

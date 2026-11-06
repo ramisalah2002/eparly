@@ -1,0 +1,125 @@
+{
+  "version": "1",
+  "offers": [
+    {
+      "providerKey": "sfr-internet",
+      "commercialName": "SFR Fibre Starter",
+      "sector": "INTERNET_BOX",
+      "territory": "FR",
+      "characteristics": {
+        "technology": "FIBER",
+        "downloadMbps": 1000,
+        "commitmentMonths": 12,
+        "features": "Debit jusqu a 1 Gb/s, 160 chaines TV"
+      },
+      "eligibilityConditions": "Sous reserve d eligibilite a l adresse. Frais d activation, de resiliation et duree d un eventuel tarif promotionnel non verifies.",
+      "commitment": "12 mois",
+      "pricing": {
+        "amountMinor": 2799,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": null,
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-internet/sfr-fibre-starter",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-internet",
+      "commercialName": "SFR Fibre Power S",
+      "sector": "INTERNET_BOX",
+      "territory": "FR",
+      "characteristics": {
+        "technology": "FIBER",
+        "downloadMbps": 1000,
+        "commitmentMonths": 12,
+        "features": "Debit jusqu a 1 Gb/s, 160 chaines TV"
+      },
+      "eligibilityConditions": "Sous reserve d eligibilite a l adresse. Frais d activation, de resiliation et duree d un eventuel tarif promotionnel non verifies.",
+      "commitment": "12 mois",
+      "pricing": {
+        "amountMinor": 2999,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": null,
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-internet/sfr-fibre-power-sl",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-internet",
+      "commercialName": "SFR Fibre Power",
+      "sector": "INTERNET_BOX",
+      "territory": "FR",
+      "characteristics": {
+        "technology": "FIBER",
+        "downloadMbps": 2000,
+        "commitmentMonths": 12,
+        "features": "Debit jusqu a 2 Gb/s partages, 200 chaines TV"
+      },
+      "eligibilityConditions": "Sous reserve d eligibilite a l adresse. Frais d activation, de resiliation et duree d un eventuel tarif promotionnel non verifies.",
+      "commitment": "12 mois",
+      "pricing": {
+        "amountMinor": 3699,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": null,
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-internet/sfr-fibre-power",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    },
+    {
+      "providerKey": "sfr-internet",
+      "commercialName": "SFR Fibre Premium",
+      "sector": "INTERNET_BOX",
+      "territory": "FR",
+      "characteristics": {
+        "technology": "FIBER",
+        "downloadMbps": 8000,
+        "commitmentMonths": 0,
+        "features": "Debit jusqu a 8 Gb/s, 200 chaines TV"
+      },
+      "eligibilityConditions": "Sous reserve d eligibilite a l adresse. Frais d activation, de resiliation et duree d un eventuel tarif promotionnel non verifies.",
+      "commitment": "Sans engagement",
+      "pricing": {
+        "amountMinor": 4599,
+        "currency": "EUR",
+        "billingPeriod": "MONTHLY",
+        "activationFeeMinor": null,
+        "discountConditions": null,
+        "taxesIncluded": true,
+        "dataUnknown": true,
+        "reason": "Prix standard publie par SFR ; cout complet non verifie"
+      },
+      "evidence": {
+        "officialUrl": "https://www.sfr.fr/offre-internet/sfr-fibre-premium-bis",
+        "consultedAt": "2026-11-02T20:25:00Z",
+        "nature": "Donnees structurees publiees sur la page officielle SFR",
+        "provenance": "Lecture ponctuelle assistee le 2 novembre 2026, a reverifier par une personne avant toute validation. Mentions legales SFR : reutilisation a confirmer."
+      }
+    }
+  ]
+}

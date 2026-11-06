@@ -1,19 +1,22 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { Eye, EyeOff } from 'lucide-react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { ArrowDownLeft, ArrowUpRight, Eye, EyeOff } from 'lucide-react-native';
 
+import { AnimatedPressable } from '@/components/motion/animated-pressable';
 import { BRAND_COLORS } from '@/constants/colors';
-import { Spacing } from '@/constants/theme';
+import { MOTION } from '@/constants/motion';
+import { FONT_FAMILY } from '@/constants/typography';
 import {
   DemoBalanceOverview,
   DemoCashFlow,
 } from '@/features/dashboard/demo/dashboard-demo-data';
+
+import { MoneyAmount } from './money-amount';
 
 interface FinancialOverviewCardProps {
   balance: DemoBalanceOverview;
@@ -22,91 +25,128 @@ interface FinancialOverviewCardProps {
   onToggleBalanceVisibility: () => void;
 }
 
+/**
+ * Eparly Editorial Financial Overview Card (Direction A with subtle tonal styling).
+ * Natural continuation of The Quiet Monograph design language:
+ * - Single unified surface with a soft lavender-pearl tonal base (#FAF9FB)
+ * - Large, confident 36px hero balance with baseline-aligned decimals
+ * - Integrated period-aware cash flow horizon with restrained mint & lavender accents
+ * - Fully dynamic period derivation, zero nested cards, and accessible 44x44 touch target
+ */
 export function FinancialOverviewCard({
   balance,
   cashFlow,
   isBalanceHidden,
   onToggleBalanceVisibility,
 }: FinancialOverviewCardProps) {
-  const formatAmount = (amountMinor: number) => {
-    if (isBalanceHidden) return '••••••';
-    const major = amountMinor / 100;
-    return new Intl.NumberFormat('en-IE', {
-      style: 'currency',
-      currency: balance.currency || 'EUR',
-      minimumFractionDigits: 2,
-    }).format(major);
-  };
+  // Dynamically derive current period if not provided by backend contract
+  const dynamicPeriod =
+    cashFlow.periodLabel?.trim() ||
+    new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date());
 
   return (
     <View style={styles.cardContainer}>
-      {/* Subtle decorative watermark accent */}
-      <View style={styles.watermarkCircle} pointerEvents="none" />
-
-      {/* Top Header Row: Label & Vector Eye Toggle */}
-      <View style={styles.topRow}>
-        <View style={styles.labelBadge}>
-          <View style={styles.activeDot} />
-          <Text style={styles.topLabel}>Total balance</Text>
+      {/* 1. Header Row: Understated Brand Eyebrow & Accessible Privacy Toggle */}
+      <View style={styles.headerRow}>
+        <View style={styles.eyebrowChip}>
+          <View style={styles.brandDot} />
+          <Text style={styles.eyebrowText}>Total balance</Text>
         </View>
 
-        <TouchableOpacity
+        <AnimatedPressable
           onPress={onToggleBalanceVisibility}
-          activeOpacity={0.7}
+          haptic="selection"
+          scaleTarget={MOTION.scale.buttonPress}
           style={styles.eyeButton}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel={isBalanceHidden ? 'Show balance' : 'Hide balance'}
           accessibilityRole="button">
-          {isBalanceHidden ? (
-            <Eye size={17} color={BRAND_COLORS.darkCharcoal} strokeWidth={2.2} />
-          ) : (
-            <EyeOff size={17} color={BRAND_COLORS.darkCharcoal} strokeWidth={2.2} />
-          )}
-        </TouchableOpacity>
+          <Animated.View key={isBalanceHidden ? 'eye-hidden' : 'eye-visible'} entering={FadeIn.duration(140)}>
+            {isBalanceHidden ? (
+              <Eye size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2} />
+            ) : (
+              <EyeOff size={18} color={BRAND_COLORS.darkCharcoal} strokeWidth={2} />
+            )}
+          </Animated.View>
+        </AnimatedPressable>
       </View>
 
-      {/* Main Balance Display */}
+      {/* 2. Hero Monetary Section: Bold Amount & Account Scope */}
       <View style={styles.balanceContainer}>
-        <Text style={styles.balanceValue}>
-          {formatAmount(balance.totalBalanceMinor)}
-        </Text>
-        <Text style={styles.accountsDetail}>{balance.accountsLabel}</Text>
+        <Animated.View
+          key={isBalanceHidden ? 'bal-hidden' : 'bal-visible'}
+          entering={FadeIn.duration(160)}>
+          <MoneyAmount
+            amountMinor={balance.totalBalanceMinor}
+            currency={balance.currency || 'EUR'}
+            locale="en-IE"
+            isHidden={isBalanceHidden}
+            size="hero"
+            accessibilityLabelPrefix="Total balance"
+          />
+        </Animated.View>
+        <View style={styles.accountScopeRow}>
+          <Text style={styles.accountsDetail}>{balance.accountsLabel}</Text>
+        </View>
       </View>
 
-      {/* Embedded Income & Expenses Cards matching Quicken reference design */}
-      <View style={styles.cashFlowRow}>
-        {/* Income Card */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.cashFlowCard,
-            styles.incomeCard,
-            pressed && styles.cardPressed,
-          ]}
-          accessibilityLabel={`Income: ${formatAmount(cashFlow.incomeMinor)}`}>
-          <View style={styles.flowLeftContent}>
-            <Text style={styles.flowAmount}>
-              {formatAmount(cashFlow.incomeMinor)}
-            </Text>
-            <Text style={styles.flowLabel}>Income</Text>
-          </View>
-          <Text style={styles.flowSign}>+</Text>
-        </Pressable>
+      {/* 3. Subtle Hairline Horizon Separator */}
+      <View style={styles.separator} />
 
-        {/* Expenses Card */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.cashFlowCard,
-            styles.expenseCard,
-            pressed && styles.cardPressed,
-          ]}
-          accessibilityLabel={`Expenses: ${formatAmount(cashFlow.expensesMinor)}`}>
-          <View style={styles.flowLeftContent}>
-            <Text style={styles.flowAmount}>
-              {formatAmount(cashFlow.expensesMinor)}
-            </Text>
-            <Text style={styles.flowLabel}>Expenses</Text>
+      {/* 4. Integrated Cash Flow Horizon: Restrained Mint & Lavender Indicators */}
+      <View style={styles.cashFlowRow}>
+        {/* Income Column */}
+        <View style={styles.cashFlowColumn}>
+          <View style={styles.cashFlowLabelRow}>
+            <View style={[styles.directionBadge, styles.incomeBadge]}>
+              <ArrowDownLeft size={11} color="#206E54" strokeWidth={2.4} />
+            </View>
+            <Text style={styles.flowTypeLabel}>Income</Text>
+            <Text style={styles.flowPeriodTag}>· {dynamicPeriod}</Text>
           </View>
-          <Text style={styles.flowSign}>−</Text>
-        </Pressable>
+          <Animated.View
+            key={isBalanceHidden ? 'income-hidden' : 'income-visible'}
+            entering={FadeIn.duration(160)}
+            style={styles.amountWrapper}>
+            <MoneyAmount
+              amountMinor={cashFlow.incomeMinor}
+              currency={balance.currency || 'EUR'}
+              locale="en-IE"
+              isHidden={isBalanceHidden}
+              size="subcard"
+              color={BRAND_COLORS.darkCharcoal}
+              accessibilityLabelPrefix={`Income for ${dynamicPeriod}`}
+            />
+          </Animated.View>
+        </View>
+
+        {/* Vertical subtle divider between columns */}
+        <View style={styles.verticalDivider} />
+
+        {/* Expenses Column */}
+        <View style={styles.cashFlowColumn}>
+          <View style={styles.cashFlowLabelRow}>
+            <View style={[styles.directionBadge, styles.expenseBadge]}>
+              <ArrowUpRight size={11} color="#755899" strokeWidth={2.4} />
+            </View>
+            <Text style={styles.flowTypeLabel}>Expenses</Text>
+            <Text style={styles.flowPeriodTag}>· {dynamicPeriod}</Text>
+          </View>
+          <Animated.View
+            key={isBalanceHidden ? 'expense-hidden' : 'expense-visible'}
+            entering={FadeIn.duration(160)}
+            style={styles.amountWrapper}>
+            <MoneyAmount
+              amountMinor={cashFlow.expensesMinor}
+              currency={balance.currency || 'EUR'}
+              locale="en-IE"
+              isHidden={isBalanceHidden}
+              size="subcard"
+              color={BRAND_COLORS.darkCharcoal}
+              accessibilityLabelPrefix={`Expenses for ${dynamicPeriod}`}
+            />
+          </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -114,129 +154,136 @@ export function FinancialOverviewCard({
 
 const styles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: BRAND_COLORS.pureWhite,
+    backgroundColor: '#FAF9FB',
     borderRadius: 24,
-    padding: Spacing.four,
+    padding: 20,
+    paddingBottom: 18,
     borderWidth: 1,
-    borderColor: BRAND_COLORS.cardBorder,
+    borderColor: 'rgba(168, 155, 190, 0.20)',
     shadowColor: BRAND_COLORS.darkCharcoal,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
-    marginBottom: Spacing.three,
-    position: 'relative',
-    overflow: 'hidden',
+    marginBottom: 14,
   },
-  watermarkCircle: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(240, 236, 245, 0.40)',
-  },
-  topRow: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
   },
-  labelBadge: {
+  eyebrowChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BRAND_COLORS.veryLightLavender,
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(240, 236, 245, 0.75)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 8,
+    gap: 6,
   },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  brandDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: BRAND_COLORS.deepLavender,
-    marginRight: 6,
   },
-  topLabel: {
+  eyebrowText: {
+    fontFamily: FONT_FAMILY.medium,
     fontSize: 12,
-    fontWeight: '600',
+    lineHeight: 15,
+    fontWeight: '500',
     color: BRAND_COLORS.deepLavender,
-    letterSpacing: 0.2,
+    letterSpacing: -0.1,
   },
   eyeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: BRAND_COLORS.warmOffWhite,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(168, 155, 190, 0.2)',
+    borderColor: 'rgba(36, 37, 53, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: BRAND_COLORS.darkCharcoal,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   balanceContainer: {
-    marginVertical: 4,
+    marginTop: 10,
+    marginBottom: 4,
   },
-  balanceValue: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: BRAND_COLORS.darkCharcoal,
-    letterSpacing: -0.6,
-    fontVariant: ['tabular-nums'],
+  accountScopeRow: {
+    marginTop: 4,
   },
   accountsDetail: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: '400',
     color: BRAND_COLORS.secondaryText,
-    marginTop: 2,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: 'rgba(168, 155, 190, 0.14)',
+    marginTop: 16,
+    marginBottom: 14,
+    width: '100%',
   },
   cashFlowRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  cashFlowCard: {
-    flex: 1,
-    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    minHeight: 88,
   },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  incomeCard: {
-    backgroundColor: '#E2F7EC',
-  },
-  expenseCard: {
-    backgroundColor: '#E4DCF8',
-  },
-  flowLeftContent: {
+  cashFlowColumn: {
     flex: 1,
-    paddingRight: 6,
   },
-  flowAmount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: BRAND_COLORS.darkCharcoal,
-    letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'],
+  verticalDivider: {
+    width: 1,
+    height: 38,
+    backgroundColor: 'rgba(168, 155, 190, 0.14)',
+    marginHorizontal: 16,
+  },
+  cashFlowLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 4,
   },
-  flowLabel: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#555566',
+  directionBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 2,
   },
-  flowSign: {
-    fontSize: 22,
+  incomeBadge: {
+    backgroundColor: '#E8F6F1',
+    borderWidth: 1,
+    borderColor: 'rgba(89, 185, 155, 0.25)',
+  },
+  expenseBadge: {
+    backgroundColor: '#F2ECF8',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 155, 190, 0.25)',
+  },
+  flowTypeLabel: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#3A3B4A',
+    letterSpacing: -0.1,
+  },
+  flowPeriodTag: {
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 11.5,
     fontWeight: '400',
-    color: BRAND_COLORS.darkCharcoal,
-    lineHeight: 22,
-    marginTop: -1,
+    color: BRAND_COLORS.secondaryText,
+    letterSpacing: -0.1,
+  },
+  amountWrapper: {
+    paddingLeft: 2,
   },
 });

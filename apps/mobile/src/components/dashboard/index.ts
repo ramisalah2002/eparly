@@ -1,6 +1,8 @@
 export { PastelBackground } from './pastel-background';
 export { DashboardHeader } from './dashboard-header';
 export { FinancialOverviewCard } from './financial-overview-card';
+export { QuickActionsSection } from './quick-actions-section';
+export { MoneyAmount } from './money-amount';
 export { SpendingChart } from './spending-chart';
 export { CategoryBreakdown } from './category-breakdown';
 export { RecentTransactions } from './recent-transactions';
